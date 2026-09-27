@@ -4,11 +4,27 @@ Self-hosted video game collection tracker with price tracking and analytics. Mul
 
 See [docs/PLAN.md](docs/PLAN.md) for the full design and roadmap.
 
-**Status:** Phase 3 complete.
+**Status:** Phase 4 complete.
 - Phase 1: accounts & roles, platform catalog, collection with filters.
 - Phase 2: PriceCharting search/import/link, scheduled polite price updates, monthly history backfill, item values, admin price-tracking page.
 - Phase 3: analytics dashboard — value/cost KPIs, value over time, value by brand/platform/era/media/category/condition/genre (click to drill down), most valuable items, biggest movers over 7d/30d/90d/1y.
-- Next: phase 4 polish (notifications, backups/export, barcode lookup).
+- Phase 4: price alerts (Apprise), scheduled backups & CSV/JSON export, UPC barcode scanning, CSV import with PriceCharting auto-link, sort by market value.
+
+## Price alerts
+
+Each user can add [Apprise URLs](https://github.com/caronc/apprise/wiki#notification-services) under *Account* (Discord, ntfy, email, Telegram, ...). After each scheduled price update they get one message listing owned items that moved by a chosen percentage, and wishlist items that dropped to their target price.
+
+## Backups
+
+Admins can schedule SQLite backups (default daily 02:30, keep 14) under *Backups*; files go to `/config/backups`. To restore, stop the container, replace `/config/vgvault.db` with a backup file (renamed to `vgvault.db`), delete any `vgvault.db-wal` / `vgvault.db-shm`, and start it again.
+
+## Importing a collection
+
+*Collection → Import* accepts a CSV with a header row. Columns are matched by name (VGVault's own export round-trips), every row is checked before anything is saved, and afterwards *Auto-link* matches the new items to PriceCharting in the background. It only links a game when there's exactly one match on the same platform with the same title (ignoring word order); the rest are listed so you can link them by hand.
+
+## Barcode scanning
+
+*Add item → Scan* uses the device camera to read a UPC. Browsers only allow camera access over HTTPS (or on localhost), so put VGVault behind your reverse proxy with TLS to scan from a phone. Typing the UPC into the search box works everywhere.
 
 ## Price tracking notes
 

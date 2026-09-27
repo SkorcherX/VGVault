@@ -63,7 +63,16 @@ const opts = <T extends string>(labels: Record<T, string>) =>
   (Object.entries(labels) as [T, string][]).map(([value, label]) => ({ value, label }))
 const strOpts = (values: string[]) => values.map((v) => ({ value: v, label: v }))
 
-type SortKey = 'title' | 'platform' | 'brand' | 'condition' | 'purchase_price' | 'purchase_date' | 'created_at'
+type SortKey =
+  | 'title'
+  | 'platform'
+  | 'brand'
+  | 'condition'
+  | 'market_price'
+  | 'value'
+  | 'purchase_price'
+  | 'purchase_date'
+  | 'created_at'
 
 export default function CollectionPage() {
   const qc = useQueryClient()
@@ -141,11 +150,16 @@ export default function CollectionPage() {
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
   const f = facets.data
 
-  const header = (key: SortKey, label: string) => (
+  const header = (key: SortKey, label: string, extra = '') => (
     <th
-      className="sortable"
+      className={`sortable ${extra}`}
       onClick={() =>
-        setSort((s) => ({ key, order: s.key === key && s.order === 'asc' ? 'desc' : 'asc' }))
+        setSort((s) => {
+          if (s.key === key) return { key, order: s.order === 'asc' ? 'desc' : 'asc' }
+          // Money and date columns are most useful biggest/newest first.
+          const descFirst = ['market_price', 'value', 'purchase_price', 'purchase_date', 'created_at'].includes(key)
+          return { key, order: descFirst ? 'desc' : 'asc' }
+        })
       }
     >
       {label}
@@ -321,8 +335,8 @@ export default function CollectionPage() {
                 <th>Category</th>
                 {header('condition', 'Condition')}
                 <th>Qty</th>
-                <th className="num">Market</th>
-                <th className="num">Value</th>
+                {header('market_price', 'Market', 'num')}
+                {header('value', 'Value', 'num')}
                 {header('purchase_price', 'Paid')}
                 {header('purchase_date', 'Bought')}
                 <th>Status</th>

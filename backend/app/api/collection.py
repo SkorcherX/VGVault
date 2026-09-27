@@ -5,11 +5,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
+from sqlalchemy.orm import aliased
 
 from app.api.deps import DB, CurrentUser
-from app.models import CollectionItem, Platform, Product
+from app.models import CollectionItem, Platform, PriceSnapshot, Product
 from app.models.enums import ItemStatus
+from app.pricing.base import CONDITION_FIELDS
 from app.schemas.collection import (
     BulkUpdate,
     Facets,
@@ -42,6 +44,21 @@ def _own_item(db: DB, user_id: int, item_id: int) -> CollectionItem:
     return item
 
 
+def _join_latest_price(stmt):
+    """Join each item's latest snapshot; return the stmt and a price-for-its-condition expression."""
+    newest = (
+        select(PriceSnapshot.product_id, func.max(PriceSnapshot.captured_on).label("day"))
+        .group_by(PriceSnapshot.product_id)
+        .subquery()
+    )
+    snap = aliased(PriceSnapshot)
+    stmt = stmt.outerjoin(newest, newest.c.product_id == CollectionItem.product_id).outerjoin(
+        snap, (snap.product_id == newest.c.product_id) & (snap.captured_on == newest.c.day)
+    )
+    price = case(*[(CollectionItem.condition == c, getattr(snap, c)) for c in CONDITION_FIELDS], else_=None)
+    return stmt, price
+
+
 def _check_product(db: DB, product_id: int | None) -> None:
     if product_id is not None and not db.get(Product, product_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown product")
@@ -59,7 +76,11 @@ def list_items(
 ):
     stmt = items_query(user.id, filters)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    column = SORTS.get(sort, Product.title)
+    if sort in ("market_price", "value"):
+        stmt, price = _join_latest_price(stmt)
+        column = price if sort == "market_price" else price * CollectionItem.quantity
+    else:
+        column = SORTS.get(sort, Product.title)
     ordered = column.desc().nulls_last() if order == "desc" else column.asc().nulls_last()
     stmt = stmt.order_by(ordered, CollectionItem.id).offset(offset).limit(limit)
     return ItemPage(items=attach_prices(db, db.scalars(stmt).unique()), total=total)

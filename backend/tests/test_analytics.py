@@ -100,3 +100,23 @@ def test_movers(data):
     # min_value threshold drops cheap items
     m = data.get("/api/analytics/movers", params={"days": 365, "min_value": 100}).json()
     assert [g["title"] for g in m["gainers"]] == ["Chrono Trigger"] and m["losers"] == []
+
+
+def test_collection_sort_by_value(data):
+    def titles(sort, order):
+        items = data.get("/api/collection", params={"sort": sort, "order": order, "status": "owned"}).json()[
+            "items"
+        ]
+        return [i["product"]["title"] for i in items]
+
+    # values: Chrono 1000 (cib), Mario 60, Halo 10 x2 = 20, Obscure unpriced (always last)
+    assert titles("value", "desc") == ["Chrono Trigger", "Super Mario 64", "Halo", "Obscure"]
+    assert titles("value", "asc") == ["Halo", "Super Mario 64", "Chrono Trigger", "Obscure"]
+    # per-unit market price: Halo 10 < Mario 60
+    assert titles("market_price", "asc") == ["Halo", "Super Mario 64", "Chrono Trigger", "Obscure"]
+    # paging still works with the extra joins
+    page = data.get(
+        "/api/collection",
+        params={"sort": "value", "order": "desc", "limit": 2, "offset": 2, "status": "owned"},
+    ).json()
+    assert page["total"] == 4 and [i["product"]["title"] for i in page["items"]] == ["Halo", "Obscure"]
