@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60 * 24 * 14
     cookie_secure: bool = False
     allow_registration: bool = False
+    scheduler_enabled: bool = True
 
     @property
     def db_url(self) -> str:

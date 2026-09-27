@@ -17,6 +17,7 @@ from app.schemas.collection import (
     ItemUpdate,
     Summary,
 )
+from app.services.valuation import attach_prices
 
 router = APIRouter(prefix="/collection", tags=["collection"])
 
@@ -108,7 +109,7 @@ def list_items(
         .offset(offset)
         .limit(limit)
     )
-    return ItemPage(items=db.scalars(stmt).unique().all(), total=total)
+    return ItemPage(items=attach_prices(db, db.scalars(stmt).unique()), total=total)
 
 
 @router.get("/facets", response_model=Facets)
@@ -132,19 +133,26 @@ def facets(db: DB, user: CurrentUser):
 
 @router.get("/summary", response_model=Summary)
 def summary(db: DB, user: CurrentUser):
-    count, quantity, cost = db.execute(
-        select(
-            func.count(CollectionItem.id),
-            func.coalesce(func.sum(CollectionItem.quantity), 0),
-            func.coalesce(func.sum(CollectionItem.purchase_price * CollectionItem.quantity), 0),
-        ).where(CollectionItem.user_id == user.id, CollectionItem.status == ItemStatus.owned)
-    ).one()
-    return Summary(items=count, quantity=int(quantity), cost_basis=float(cost))
+    owned = attach_prices(
+        db,
+        db.scalars(
+            select(CollectionItem).where(
+                CollectionItem.user_id == user.id, CollectionItem.status == ItemStatus.owned
+            )
+        ).unique(),
+    )
+    return Summary(
+        items=len(owned),
+        quantity=sum(i.quantity for i in owned),
+        cost_basis=float(sum((i.purchase_price or 0) * i.quantity for i in owned)),
+        total_value=float(sum(i.value or 0 for i in owned)),
+        unpriced=sum(1 for i in owned if i.value is None),
+    )
 
 
 @router.get("/{item_id}", response_model=ItemOut)
 def get_item(item_id: int, db: DB, user: CurrentUser):
-    return _own_item(db, user.id, item_id)
+    return attach_prices(db, [_own_item(db, user.id, item_id)])[0]
 
 
 @router.post("", response_model=ItemOut, status_code=201)
@@ -154,7 +162,7 @@ def create_item(body: ItemCreate, db: DB, user: CurrentUser):
     db.add(item)
     db.commit()
     db.refresh(item)
-    return item
+    return attach_prices(db, [item])[0]
 
 
 @router.patch("/bulk", response_model=list[ItemOut])
@@ -174,7 +182,7 @@ def bulk_update(body: BulkUpdate, db: DB, user: CurrentUser):
         for key, value in changes.items():
             setattr(item, key, value)
     db.commit()
-    return items
+    return attach_prices(db, items)
 
 
 @router.patch("/{item_id}", response_model=ItemOut)
@@ -186,7 +194,7 @@ def update_item(item_id: int, body: ItemUpdate, db: DB, user: CurrentUser):
         setattr(item, key, value)
     db.commit()
     db.refresh(item)
-    return item
+    return attach_prices(db, [item])[0]
 
 
 @router.delete("/{item_id}", status_code=204)

@@ -64,6 +64,10 @@ class ItemOut(ItemFields):
     product: ProductOut
     created_at: datetime
     updated_at: datetime
+    # Filled from the latest price snapshot for the item's condition.
+    market_price: Decimal | None = None
+    value: Decimal | None = None
+    priced_on: date | None = None
 
 
 class ItemPage(BaseModel):
@@ -84,3 +88,5 @@ class Summary(BaseModel):
     items: int
     quantity: int
     cost_basis: float
+    total_value: float
+    unpriced: int

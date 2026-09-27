@@ -69,6 +69,8 @@ export interface Product {
   upc: string | null
   pricecharting_id: string | null
   pricecharting_url: string | null
+  has_image: boolean
+  last_priced_at: string | null
 }
 
 export interface ItemFields {
@@ -95,7 +97,96 @@ export interface Item extends ItemFields {
   product: Product
   created_at: string
   updated_at: string
+  market_price: string | null
+  value: string | null
+  priced_on: string | null
 }
+
+export interface Summary {
+  items: number
+  quantity: number
+  cost_basis: number
+  total_value: number
+  unpriced: number
+}
+
+export interface SearchHit {
+  source_id: string
+  title: string
+  url: string
+  console_name: string | null
+  console_slug: string | null
+  image_url: string | null
+  loose: string | null
+  cib: string | null
+  new: string | null
+  platform_id: number | null
+  platform_match: boolean
+  product_id: number | null
+}
+
+export interface Snapshot {
+  captured_on: string
+  loose: string | null
+  cib: string | null
+  new: string | null
+  graded: string | null
+  box_only: string | null
+  manual_only: string | null
+  source: 'scrape' | 'history'
+}
+
+export interface ScraperSettings {
+  enabled: boolean
+  cron: string
+  min_delay: number
+  max_delay: number
+  max_consecutive_failures: number
+  min_hours_between_updates: number
+  user_refresh_cooldown_minutes: number
+  backfill_history: boolean
+}
+
+export interface ScrapeRun {
+  id: number
+  trigger: string
+  status: string
+  started_at: string
+  finished_at: string | null
+  total: number
+  succeeded: number
+  failed: number
+  skipped: number
+  message: string | null
+}
+
+export interface ScraperStatus {
+  settings: ScraperSettings
+  running: boolean
+  current_run_id: number | null
+  current_item: string | null
+  next_run_at: string | null
+  linked_products: number
+  tracked_products: number
+  unlinked_products: number
+  runs: ScrapeRun[]
+}
+
+export interface ScrapeErrorRow {
+  id: number
+  run_id: number | null
+  product_id: number | null
+  product_title: string | null
+  url: string | null
+  http_status: number | null
+  kind: string
+  message: string
+  snapshot_path: string | null
+  created_at: string
+}
+
+/** Server datetimes are naive UTC. */
+export const parseUtc = (s: string) => new Date(/[zZ]|[+-]\d\d:\d\d$/.test(s) ? s : `${s}Z`)
 
 export interface Facets {
   brands: string[]
@@ -154,5 +245,6 @@ export const api = {
   get: <T>(path: string, params?: Params) => request<T>('GET', path, undefined, params),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
+  put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   del: (path: string) => request<void>('DELETE', path),
 }

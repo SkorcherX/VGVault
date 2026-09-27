@@ -5,6 +5,7 @@ import AccountPage from './pages/AccountPage'
 import CollectionPage from './pages/CollectionPage'
 import LoginPage from './pages/LoginPage'
 import PlatformsPage from './pages/PlatformsPage'
+import ScraperPage from './pages/ScraperPage'
 import SetupPage from './pages/SetupPage'
 import UsersPage from './pages/UsersPage'
 
@@ -43,7 +44,12 @@ function Shell({ user }: { user: User }) {
         <nav>
           <NavLink to="/collection">Collection</NavLink>
           <NavLink to="/platforms">Platforms</NavLink>
-          {user.role === 'admin' && <NavLink to="/admin/users">Users</NavLink>}
+          {user.role === 'admin' && (
+            <>
+              <NavLink to="/admin/prices">Price tracking</NavLink>
+              <NavLink to="/admin/users">Users</NavLink>
+            </>
+          )}
         </nav>
         <div className="spacer" />
         <NavLink to="/account" className="muted">
@@ -60,6 +66,7 @@ function Shell({ user }: { user: User }) {
           <Route path="/platforms" element={<PlatformsPage isAdmin={user.role === 'admin'} />} />
           <Route path="/account" element={<AccountPage user={user} />} />
           {user.role === 'admin' && <Route path="/admin/users" element={<UsersPage me={user} />} />}
+          {user.role === 'admin' && <Route path="/admin/prices" element={<ScraperPage />} />}
           <Route path="*" element={<Navigate to="/collection" replace />} />
         </Routes>
       </main>

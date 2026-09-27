@@ -4,6 +4,7 @@ import tempfile
 # Must be set before app modules are imported (engine is created at import).
 os.environ["CONFIG_DIR"] = tempfile.mkdtemp(prefix="vgvault-test-")
 os.environ.pop("DATABASE_URL", None)
+os.environ["SCHEDULER_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient

@@ -38,6 +38,12 @@ class Product(Base):
     pricecharting_id: Mapped[str | None] = mapped_column(String(32))
     pricecharting_url: Mapped[str | None] = mapped_column(String(512))
     image_path: Mapped[str | None] = mapped_column(String(512))
+    image_url: Mapped[str | None] = mapped_column(String(512))
+    last_priced_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
     platform: Mapped[Platform] = relationship(lazy="joined")
+
+    @property
+    def has_image(self) -> bool:
+        return bool(self.image_path)

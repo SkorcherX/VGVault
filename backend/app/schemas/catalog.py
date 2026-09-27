@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -67,3 +67,5 @@ class ProductOut(ProductBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     platform: PlatformOut
+    has_image: bool = False
+    last_priced_at: datetime | None = None

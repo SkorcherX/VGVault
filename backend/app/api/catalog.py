@@ -88,6 +88,14 @@ def search_products(
     return db.scalars(stmt).all()
 
 
+@router.get("/products/{product_id}", response_model=ProductOut)
+def get_product(product_id: int, db: DB, _: CurrentUser):
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    return product
+
+
 @router.post("/products", response_model=ProductOut, status_code=201)
 def create_product(body: ProductCreate, db: DB, _: CurrentUser):
     if not db.get(Platform, body.platform_id):

@@ -1,9 +1,10 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   api,
   CATEGORIES,
   CONDITIONS,
+  parseUtc,
   STATUSES,
   type Category,
   type Condition,
@@ -12,8 +13,11 @@ import {
   type ItemStatus,
   type Platform,
   type Product,
+  type SearchHit,
+  type Snapshot,
 } from '../api'
-import { ErrorText, Field, Modal } from '../components'
+import { ErrorText, Field, Modal, money } from '../components'
+import PriceChart from '../PriceChart'
 
 const DEFAULTS: ItemFields = {
   status: 'owned',
@@ -46,7 +50,16 @@ export default function ItemDialog({
   const [product, setProduct] = useState<Product | null>(item?.product ?? null)
   const [fields, setFields] = useState<ItemFields>(() => {
     if (!item) return DEFAULTS
-    const { id: _id, product: _p, created_at: _c, updated_at: _u, ...rest } = item
+    const {
+      id: _id,
+      product: _p,
+      created_at: _c,
+      updated_at: _u,
+      market_price: _m,
+      value: _v,
+      priced_on: _po,
+      ...rest
+    } = item
     return rest
   })
   const [tagText, setTagText] = useState(fields.tags.join(', '))
@@ -76,7 +89,8 @@ export default function ItemDialog({
     },
   })
 
-  const set = <K extends keyof ItemFields>(key: K, value: ItemFields[K]) => setFields((f) => ({ ...f, [key]: value }))
+  const set = <K extends keyof ItemFields>(key: K, value: ItemFields[K]) =>
+    setFields((f) => ({ ...f, [key]: value }))
   const str = (v: string) => (v === '' ? null : v)
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -87,19 +101,35 @@ export default function ItemDialog({
     <Modal title={item ? 'Edit item' : 'Add item'} onClose={onClose} wide>
       {product ? (
         <div className="picked">
+          {product.has_image && <img className="cover" src={`/api/products/${product.id}/image`} alt="" />}
           <div>
             <strong>{product.title}</strong>
-            <span className="muted">
-              {' '}
-              · {product.platform.name} · {CATEGORIES[product.category]}
-            </span>
+            <div className="muted">
+              {product.platform.name} · {CATEGORIES[product.category]}
+              {product.genre && ` · ${product.genre}`}
+            </div>
           </div>
-          <button className="link" onClick={() => setProduct(null)}>
-            change
-          </button>
+          <div className="spacer" />
+          {!item && (
+            <button className="link" onClick={() => setProduct(null)}>
+              change
+            </button>
+          )}
         </div>
       ) : (
         <ProductPicker onPick={setProduct} />
+      )}
+
+      {product && (
+        <PricePanel
+          product={product}
+          condition={fields.condition}
+          purchasePrice={fields.purchase_price}
+          onProductChange={(p) => {
+            setProduct(p)
+            onSaved()
+          }}
+        />
       )}
 
       {product && (
@@ -226,13 +256,227 @@ export default function ItemDialog({
   )
 }
 
-/** Search the shared catalog, or create a new catalog product. */
+/** Current market price, history chart, and PriceCharting link/refresh controls. */
+function PricePanel({
+  product,
+  condition,
+  purchasePrice,
+  onProductChange,
+}: {
+  product: Product
+  condition: Condition
+  purchasePrice: string | null
+  onProductChange: (p: Product) => void
+}) {
+  const qc = useQueryClient()
+  const [linkUrl, setLinkUrl] = useState('')
+  const history = useQuery({
+    queryKey: ['prices', product.id],
+    queryFn: () => api.get<Snapshot[]>(`/products/${product.id}/prices`),
+    enabled: !!product.pricecharting_url,
+  })
+  const done = (p: Product) => {
+    qc.invalidateQueries({ queryKey: ['prices', product.id] })
+    setLinkUrl('')
+    onProductChange(p)
+  }
+  const refresh = useMutation({
+    mutationFn: () => api.post<Product>(`/products/${product.id}/refresh`),
+    onSuccess: done,
+  })
+  const link = useMutation({
+    mutationFn: () => api.post<Product>(`/products/${product.id}/link`, { url: linkUrl.trim() }),
+    onSuccess: done,
+  })
+
+  if (!product.pricecharting_url) {
+    return (
+      <div className="price-panel">
+        <p className="muted">Not linked to PriceCharting, so no price tracking yet. Paste the game's page URL:</p>
+        <div className="row">
+          <input
+            placeholder="https://www.pricecharting.com/game/…"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            style={{ flex: 1, width: 'auto' }}
+          />
+          <button type="button" disabled={!linkUrl || link.isPending} onClick={() => link.mutate()}>
+            {link.isPending ? 'Linking…' : 'Link'}
+          </button>
+        </div>
+        <ErrorText error={link.error} />
+      </div>
+    )
+  }
+
+  const snaps = history.data ?? []
+  const latest = snaps[snaps.length - 1]
+  const current = latest?.[condition]
+
+  return (
+    <div className="price-panel">
+      <div className="row">
+        <div>
+          <div className="muted small">{CONDITIONS[condition]} market price</div>
+          <div className="big">{money(current)}</div>
+        </div>
+        {latest && (
+          <div className="muted small">
+            Loose {money(latest.loose)} · CIB {money(latest.cib)} · New {money(latest.new)}
+          </div>
+        )}
+        <div className="spacer" />
+        <div className="muted small right">
+          {product.last_priced_at ? `Updated ${parseUtc(product.last_priced_at).toLocaleString()}` : 'Never updated'}
+          <br />
+          <a href={product.pricecharting_url} target="_blank" rel="noreferrer noopener" className="link">
+            View on PriceCharting ↗
+          </a>
+        </div>
+        <button type="button" className="ghost" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+          {refresh.isPending ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      <ErrorText error={refresh.error} />
+      {history.isLoading ? (
+        <p className="muted">Loading history…</p>
+      ) : (
+        <PriceChart snapshots={snaps} condition={condition} purchasePrice={purchasePrice} />
+      )}
+    </div>
+  )
+}
+
+/** Search PriceCharting (default) or the local catalog / create manually. */
 function ProductPicker({ onPick }: { onPick: (p: Product) => void }) {
+  const [mode, setMode] = useState<'pricecharting' | 'manual'>('pricecharting')
+  const [platformId, setPlatformId] = useState<number | ''>('')
+  const platforms = useQuery({ queryKey: ['platforms'], queryFn: () => api.get<Platform[]>('/platforms') })
+
+  return (
+    <div className="picker">
+      <div className="seg" style={{ marginBottom: '0.75rem' }}>
+        <button type="button" className={mode === 'pricecharting' ? 'on' : ''} onClick={() => setMode('pricecharting')}>
+          Search PriceCharting
+        </button>
+        <button type="button" className={mode === 'manual' ? 'on' : ''} onClick={() => setMode('manual')}>
+          Catalog / manual
+        </button>
+      </div>
+      <Field label="Platform">
+        <select value={platformId} onChange={(e) => setPlatformId(e.target.value ? Number(e.target.value) : '')}>
+          <option value="">{mode === 'pricecharting' ? 'Any' : 'Choose…'}</option>
+          {platforms.data?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({p.brand})
+            </option>
+          ))}
+        </select>
+      </Field>
+      {mode === 'pricecharting' ? (
+        <PriceChartingSearch platformId={platformId} onPick={onPick} />
+      ) : (
+        <ManualPicker platformId={platformId} onPick={onPick} />
+      )}
+    </div>
+  )
+}
+
+function PriceChartingSearch({ platformId, onPick }: { platformId: number | ''; onPick: (p: Product) => void }) {
+  const [q, setQ] = useState('')
+  const [category, setCategory] = useState<Category | ''>('')
+  const search = useMutation({
+    mutationFn: () => api.get<SearchHit[]>('/pricecharting/search', { q, platform_id: platformId || undefined }),
+  })
+  const choose = useMutation({
+    mutationFn: (hit: SearchHit) =>
+      hit.product_id
+        ? api.get<Product>(`/products/${hit.product_id}`)
+        : api.post<Product>('/products/import', {
+            url: hit.url,
+            platform_id: hit.platform_id ?? (platformId || null),
+            category: category || null,
+          }),
+    onSuccess: onPick,
+  })
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (q.trim().length >= 2) search.mutate()
+  }
+
+  return (
+    <>
+      <form onSubmit={onSubmit} className="row">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Title, UPC or ASIN"
+          autoFocus
+          style={{ flex: 1, width: 'auto' }}
+        />
+        <button type="submit" disabled={search.isPending || q.trim().length < 2}>
+          {search.isPending ? 'Searching…' : 'Search'}
+        </button>
+      </form>
+      <ErrorText error={search.error ?? choose.error} />
+      {search.data && search.data.length === 0 && <p className="muted">No results.</p>}
+      {search.data && search.data.length > 0 && (
+        <>
+          <ul className="results-list">
+            {search.data.map((hit) => (
+              <li key={hit.source_id}>
+                <button
+                  type="button"
+                  className="ghost hit"
+                  disabled={choose.isPending}
+                  onClick={() => choose.mutate(hit)}
+                >
+                  {hit.image_url ? <img src={hit.image_url} alt="" loading="lazy" /> : <span className="noimg" />}
+                  <span className="hit-title">
+                    <strong>{hit.title}</strong>
+                    <span className="muted">
+                      {' '}
+                      · {hit.console_name ?? hit.console_slug}
+                      {hit.platform_match && ' ✓'}
+                      {hit.product_id && ' · in catalog'}
+                      {!hit.platform_id && !platformId && ' · no platform mapping'}
+                    </span>
+                  </span>
+                  <span className="hit-prices muted small">
+                    L {money(hit.loose)} · C {money(hit.cib)} · N {money(hit.new)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="row small">
+            <span className="muted">Import as</span>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as Category | '')}
+              style={{ width: 'auto' }}
+              aria-label="Category"
+            >
+              <option value="">Auto (game / console)</option>
+              {Object.entries(CATEGORIES).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            {choose.isPending && <span className="muted">Fetching prices & history…</span>}
+          </div>
+        </>
+      )}
+      <p className="muted small">Requests to PriceCharting are rate limited, so each one can take a few seconds.</p>
+    </>
+  )
+}
+
+function ManualPicker({ platformId, onPick }: { platformId: number | ''; onPick: (p: Product) => void }) {
   const [q, setQ] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [platformId, setPlatformId] = useState<number | ''>('')
   const [category, setCategory] = useState<Category>('game')
-  const platforms = useQuery({ queryKey: ['platforms'], queryFn: () => api.get<Platform[]>('/platforms') })
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250)
@@ -250,31 +494,20 @@ function ProductPicker({ onPick }: { onPick: (p: Product) => void }) {
   })
 
   return (
-    <div className="picker">
-      <div className="grid2">
-        <Field label="Title">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. Super Metroid" autoFocus />
-        </Field>
-        <Field label="Platform">
-          <select value={platformId} onChange={(e) => setPlatformId(e.target.value ? Number(e.target.value) : '')}>
-            <option value="">Any / choose…</option>
-            {platforms.data?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.brand})
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
+    <>
+      <Field label="Title">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your catalog" autoFocus />
+      </Field>
       {results.data && results.data.length > 0 && (
         <ul className="results-list">
           {results.data.map((p) => (
             <li key={p.id}>
-              <button className="ghost" onClick={() => onPick(p)}>
+              <button type="button" className="ghost" onClick={() => onPick(p)}>
                 <strong>{p.title}</strong>
                 <span className="muted">
                   {' '}
                   · {p.platform.name} · {CATEGORIES[p.category]}
+                  {p.pricecharting_id && ' · priced'}
                 </span>
               </button>
             </li>
@@ -291,14 +524,13 @@ function ProductPicker({ onPick }: { onPick: (p: Product) => void }) {
               </option>
             ))}
           </select>
-          <button disabled={!platformId || create.isPending} onClick={() => create.mutate()}>
+          <button type="button" disabled={!platformId || create.isPending} onClick={() => create.mutate()}>
             Create “{q.trim()}”
           </button>
           {!platformId && <span className="muted">(pick a platform first)</span>}
         </div>
       )}
       <ErrorText error={create.error} />
-      <p className="muted small">PriceCharting search & linking arrives in phase 2.</p>
-    </div>
+    </>
   )
 }

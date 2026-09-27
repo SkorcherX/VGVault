@@ -12,6 +12,7 @@ import {
   type Item,
   type ItemStatus,
   type MediaType,
+  type Summary,
 } from '../api'
 import { CheckList, ErrorText, money } from '../components'
 import ItemDialog from './ItemDialog'
@@ -107,7 +108,7 @@ export default function CollectionPage() {
   })
   const summary = useQuery({
     queryKey: ['summary'],
-    queryFn: () => api.get<{ items: number; quantity: number; cost_basis: number }>('/collection/summary'),
+    queryFn: () => api.get<Summary>('/collection/summary'),
   })
 
   const invalidate = () => {
@@ -223,7 +224,9 @@ export default function CollectionPage() {
           <h1>Collection</h1>
           {summary.data && (
             <span className="muted">
-              {summary.data.quantity} owned · cost basis {money(summary.data.cost_basis)}
+              <strong className="value">{money(summary.data.total_value)}</strong> value ·{' '}
+              {summary.data.quantity} owned · paid {money(summary.data.cost_basis)}
+              {summary.data.unpriced > 0 && ` · ${summary.data.unpriced} unpriced`}
             </span>
           )}
           <div className="spacer" />
@@ -297,6 +300,8 @@ export default function CollectionPage() {
                 <th>Category</th>
                 {header('condition', 'Condition')}
                 <th>Qty</th>
+                <th className="num">Market</th>
+                <th className="num">Value</th>
                 {header('purchase_price', 'Paid')}
                 {header('purchase_date', 'Bought')}
                 <th>Status</th>
@@ -317,8 +322,18 @@ export default function CollectionPage() {
                       }}
                     />
                   </td>
-                  <td>
+                  <td className="title-cell">
+                    {item.product.has_image ? (
+                      <img className="thumb" src={`/api/products/${item.product.id}/image`} alt="" loading="lazy" />
+                    ) : (
+                      <span className="thumb" />
+                    )}
                     {item.product.title}
+                    {!item.product.pricecharting_id && (
+                      <span className="tag" title="Not linked to PriceCharting">
+                        unlinked
+                      </span>
+                    )}
                     {item.tags.map((t) => (
                       <span key={t} className="tag">
                         {t}
@@ -330,14 +345,18 @@ export default function CollectionPage() {
                   <td>{CATEGORIES[item.product.category]}</td>
                   <td>{CONDITIONS[item.condition]}</td>
                   <td>{item.quantity}</td>
-                  <td>{money(item.purchase_price)}</td>
+                  <td className="num">{money(item.market_price)}</td>
+                  <td className="num">
+                    <strong>{money(item.value)}</strong>
+                  </td>
+                  <td className="num">{money(item.purchase_price)}</td>
                   <td>{item.purchase_date ?? ''}</td>
                   <td>{STATUSES[item.status]}</td>
                 </tr>
               ))}
               {!items.isLoading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="muted empty">
+                  <td colSpan={12} className="muted empty">
                     Nothing here yet. Add an item or loosen the filters.
                   </td>
                 </tr>

@@ -466,3 +466,191 @@ main {
     grid-column: auto;
   }
 }
+
+/* --- Phase 2: prices ------------------------------------------------------- */
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+.right {
+  text-align: right;
+}
+.big {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.value {
+  color: var(--text);
+}
+.title-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--surface-2);
+  flex: none;
+  display: inline-block;
+}
+.cover {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-wrap: wrap;
+}
+.seg button {
+  background: transparent;
+  color: var(--muted);
+  border-radius: 0;
+  padding: 0.3rem 0.7rem;
+  font-weight: 600;
+}
+.seg button.on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.price-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.price-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 0.5rem;
+}
+.price-chart .line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.price-chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.price-chart .paid {
+  stroke: var(--ok);
+  stroke-dasharray: 4 4;
+}
+.price-chart .axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.price-chart .tip {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.price-chart .dot {
+  fill: var(--accent);
+}
+
+.results-list .hit {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+.results-list .hit img,
+.results-list .hit .noimg {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  background: var(--surface-2);
+  border-radius: 4px;
+}
+.hit-prices {
+  white-space: nowrap;
+}
+
+/* Admin scraper page */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+}
+.stat-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) 1.4fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: start;
+}
+.progress {
+  margin-bottom: 1rem;
+}
+.bar {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+.bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s;
+}
+.pill {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.pill.ok {
+  color: var(--ok);
+}
+.pill.failed,
+.pill.blocked,
+.pill.parse {
+  color: var(--danger);
+}
+.table td.wrap {
+  white-space: normal;
+  min-width: 240px;
+}
+@media (max-width: 800px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .results-list .hit {
+    grid-template-columns: 36px 1fr;
+  }
+  .hit-prices {
+    grid-column: 2;
+  }
+}

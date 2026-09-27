@@ -84,7 +84,7 @@ def test_collection_filters(admin):
     assert [i["product"]["title"] for i in items] == ["Super Mario 64", "Halo", "Final Fantasy VII"]
 
     summary = admin.get("/api/collection/summary").json()
-    assert summary == {"items": 2, "quantity": 2, "cost_basis": 45.0}
+    assert summary == {"items": 2, "quantity": 2, "cost_basis": 45.0, "total_value": 0.0, "unpriced": 2}
 
     facets = admin.get("/api/collection/facets").json()
     assert facets["brands"] == ["Microsoft", "Nintendo", "Sony"]
