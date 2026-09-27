@@ -161,3 +161,11 @@ def test_admin_settings(admin, fake):
     admin.post("/api/users", json={"username": "bob", "password": "password123"})
     login(admin, "bob")
     assert admin.get("/api/admin/scraper").status_code == 403
+
+
+def test_import_stores_upc_and_catalog_upc_lookup(admin, fake):
+    product = admin.post("/api/products/import", json={"url": URL, "upc": "045496830434"}).json()
+    assert product["upc"] == "045496830434"
+    found = admin.get("/api/products", params={"upc": "045496830434"}).json()
+    assert [p["id"] for p in found] == [product["id"]]
+    assert admin.post("/api/products/import", json={"url": URL, "upc": "abc"}).status_code == 422

@@ -909,3 +909,23 @@ code {
   left: auto;
   right: 0;
 }
+.scanner {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+.scanner video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.scanner-guide {
+  position: absolute;
+  inset: 35% 10%;
+  border: 2px solid rgb(255 255 255 / 0.85);
+  border-radius: 8px;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.35);
+}

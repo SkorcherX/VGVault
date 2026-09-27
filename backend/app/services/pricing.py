@@ -153,7 +153,14 @@ def resolve_platform(db: Session, console_slug: str | None, fallback_id: int | N
     return db.get(Platform, fallback_id) if fallback_id else None
 
 
-def import_product(db: Session, url: str, *, platform_id: int | None, category: Category | None) -> Product:
+def import_product(
+    db: Session,
+    url: str,
+    *,
+    platform_id: int | None,
+    category: Category | None,
+    upc: str | None = None,
+) -> Product:
     """Create (or return existing) catalog product from a PriceCharting page, with prices."""
     settings = get_scraper_settings(db)
     configure_limiter(settings)
@@ -161,6 +168,9 @@ def import_product(db: Session, url: str, *, platform_id: int | None, category: 
     page = provider.fetch(url)
     existing = db.scalar(select(Product).where(Product.pricecharting_id == page.source_id))
     if existing:
+        if upc and not existing.upc:
+            existing.upc = upc
+            db.commit()
         return existing
     platform = resolve_platform(db, page.console_slug, platform_id)
     if platform is None:
@@ -172,6 +182,7 @@ def import_product(db: Session, url: str, *, platform_id: int | None, category: 
         title=page.title,
         platform_id=platform.id,
         category=category or (Category.console if page.is_system else Category.game),
+        upc=upc,
     )
     db.add(product)
     db.flush()

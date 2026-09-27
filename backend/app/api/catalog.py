@@ -76,9 +76,12 @@ def search_products(
     q: str | None = None,
     platform_id: int | None = None,
     category: Category | None = None,
+    upc: str | None = None,
     limit: int = Query(50, le=200),
 ):
     stmt = select(Product).order_by(Product.title).limit(limit)
+    if upc:
+        stmt = stmt.where(Product.upc == upc)
     if q:
         stmt = stmt.where(Product.title.ilike(f"%{q}%"))
     if platform_id:

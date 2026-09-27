@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   api,
   CATEGORIES,
@@ -17,6 +17,7 @@ import {
   type Snapshot,
 } from '../api'
 import { ErrorText, Field, Modal, money } from '../components'
+import BarcodeScanner, { cameraAvailable, normalizeUpc } from '../BarcodeScanner'
 import PriceChart from '../PriceChart'
 
 const DEFAULTS: ItemFields = {
@@ -385,9 +386,30 @@ function ProductPicker({ onPick }: { onPick: (p: Product) => void }) {
 function PriceChartingSearch({ platformId, onPick }: { platformId: number | ''; onPick: (p: Product) => void }) {
   const [q, setQ] = useState('')
   const [category, setCategory] = useState<Category | ''>('')
+  const [scanning, setScanning] = useState(false)
+  const isUpc = /^\d{8,14}$/.test(q.trim())
   const search = useMutation({
-    mutationFn: () => api.get<SearchHit[]>('/pricecharting/search', { q, platform_id: platformId || undefined }),
+    mutationFn: async (query: string) => {
+      // A barcode already in the catalog doesn't need a trip to PriceCharting.
+      if (/^\d{8,14}$/.test(query)) {
+        const local = await api.get<Product[]>('/products', { upc: query })
+        if (local.length > 0) {
+          onPick(local[0])
+          return []
+        }
+      }
+      return api.get<SearchHit[]>('/pricecharting/search', { q: query, platform_id: platformId || undefined })
+    },
   })
+  const onScanned = useCallback(
+    (code: string) => {
+      setScanning(false)
+      setQ(code)
+      search.mutate(code)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
   const choose = useMutation({
     mutationFn: (hit: SearchHit) =>
       hit.product_id
@@ -396,12 +418,15 @@ function PriceChartingSearch({ platformId, onPick }: { platformId: number | ''; 
             url: hit.url,
             platform_id: hit.platform_id ?? (platformId || null),
             category: category || null,
+            upc: isUpc ? q.trim() : null,
           }),
     onSuccess: onPick,
   })
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (q.trim().length >= 2) search.mutate()
+    const query = /^\d{13}$/.test(q.trim()) ? normalizeUpc(q.trim()) : q.trim()
+    if (query !== q) setQ(query)
+    if (query.length >= 2) search.mutate(query)
   }
 
   return (
@@ -417,9 +442,21 @@ function PriceChartingSearch({ platformId, onPick }: { platformId: number | ''; 
         <button type="submit" disabled={search.isPending || q.trim().length < 2}>
           {search.isPending ? 'Searching…' : 'Search'}
         </button>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setScanning(true)}
+          disabled={!cameraAvailable()}
+          title={cameraAvailable() ? 'Scan a UPC barcode' : 'Camera needs HTTPS (or localhost). Type the UPC instead.'}
+        >
+          📷 Scan
+        </button>
       </form>
+      {scanning && <BarcodeScanner onDetected={onScanned} onClose={() => setScanning(false)} />}
       <ErrorText error={search.error ?? choose.error} />
-      {search.data && search.data.length === 0 && <p className="muted">No results.</p>}
+      {search.isSuccess && search.data.length === 0 && (
+        <p className="muted">{isUpc ? 'No product found for that barcode. Try searching by title.' : 'No results.'}</p>
+      )}
       {search.data && search.data.length > 0 && (
         <>
           <ul className="results-list">

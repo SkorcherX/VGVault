@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.deps import DB, AdminUser, CurrentUser
@@ -94,6 +94,7 @@ class ImportRequest(BaseModel):
     url: str
     platform_id: int | None = None
     category: Category | None = None
+    upc: str | None = Field(default=None, pattern=r"^\d{8,14}$")
 
 
 @router.post("/products/import", response_model=ProductOut)
@@ -101,7 +102,9 @@ def import_product(body: ImportRequest, db: DB, _: CurrentUser):
     if not is_pricecharting_url(body.url):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Not a PriceCharting product URL")
     try:
-        return pricing.import_product(db, body.url, platform_id=body.platform_id, category=body.category)
+        return pricing.import_product(
+            db, body.url, platform_id=body.platform_id, category=body.category, upc=body.upc
+        )
     except LookupError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from None
     except PriceProviderError as e:
