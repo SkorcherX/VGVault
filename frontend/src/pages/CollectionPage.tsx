@@ -49,9 +49,9 @@ const EMPTY_FILTERS: Filters = {
 
 const FILTERS_KEY = 'vgvault.filters'
 
-function loadFilters(): Filters {
+function loadFilters(key: string): Filters {
   try {
-    const raw = localStorage.getItem(FILTERS_KEY)
+    const raw = localStorage.getItem(key)
     return raw ? { ...EMPTY_FILTERS, ...JSON.parse(raw) } : EMPTY_FILTERS
   } catch {
     return EMPTY_FILTERS
@@ -74,9 +74,20 @@ type SortKey =
   | 'purchase_date'
   | 'created_at'
 
-export default function CollectionPage() {
+interface SharedPage {
+  owner: string
+  shows_paid: boolean
+  items: Item[]
+  total: number
+}
+
+/** Your own collection, or (with `ownerId`) someone's shared collection, read-only. */
+export default function CollectionPage({ ownerId }: { ownerId?: number }) {
   const qc = useQueryClient()
-  const [filters, setFilters] = useState<Filters>(loadFilters)
+  const readOnly = ownerId !== undefined
+  const base = readOnly ? `/shared/${ownerId}` : '/collection'
+  const storeKey = readOnly ? `vgvault.shared.${ownerId}` : FILTERS_KEY
+  const [filters, setFilters] = useState<Filters>(() => loadFilters(storeKey))
   const [search, setSearch] = useState(filters.q)
   const [sort, setSort] = useState<{ key: SortKey; order: 'asc' | 'desc' }>({ key: 'title', order: 'asc' })
   const [page, setPage] = useState(0)
@@ -85,11 +96,11 @@ export default function CollectionPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(FILTERS_KEY, JSON.stringify(filters))
+      localStorage.setItem(storeKey, JSON.stringify(filters))
     } catch {
       /* storage unavailable */
     }
-  }, [filters])
+  }, [filters, storeKey])
 
   // Debounce the text search.
   useEffect(() => {
@@ -104,11 +115,11 @@ export default function CollectionPage() {
     setSelected(new Set())
   }
 
-  const facets = useQuery({ queryKey: ['facets'], queryFn: () => api.get<Facets>('/collection/facets') })
+  const facets = useQuery({ queryKey: ['facets', ownerId], queryFn: () => api.get<Facets>(`${base}/facets`) })
   const items = useQuery({
-    queryKey: ['collection', filters, sort, page],
+    queryKey: ['collection', ownerId, filters, sort, page],
     queryFn: () =>
-      api.get<{ items: Item[]; total: number }>('/collection', {
+      api.get<Partial<SharedPage> & { items: Item[]; total: number }>(readOnly ? `${base}/collection` : base, {
         ...filters,
         sort: sort.key,
         order: sort.order,
@@ -118,9 +129,10 @@ export default function CollectionPage() {
     placeholderData: keepPreviousData,
   })
   const summary = useQuery({
-    queryKey: ['summary'],
-    queryFn: () => api.get<Summary>('/collection/summary'),
+    queryKey: ['summary', ownerId],
+    queryFn: () => api.get<Partial<Summary> & { total_value: number; quantity: number }>(`${base}/summary`),
   })
+  const showPaid = !readOnly || !!items.data?.shows_paid
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['collection'] })
@@ -172,7 +184,7 @@ export default function CollectionPage() {
       <aside className="filters">
         <input
           type="search"
-          placeholder="Search titles & notes…"
+          placeholder={readOnly ? 'Search titles…' : 'Search titles & notes…'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -238,37 +250,47 @@ export default function CollectionPage() {
 
       <section className="results">
         <div className="page-head">
-          <h1>Collection</h1>
+          <h1>{readOnly ? `${items.data?.owner ?? '…'}'s collection` : 'Collection'}</h1>
+          {readOnly && <span className="badge">read-only</span>}
           {summary.data && (
             <span className="muted">
-              <strong className="value">{money(summary.data.total_value)}</strong> value ·{' '}
-              {summary.data.quantity} owned · paid {money(summary.data.cost_basis)}
-              {summary.data.unpriced > 0 && ` · ${summary.data.unpriced} unpriced`}
+              <strong className="value">{money(summary.data.total_value)}</strong> value · {summary.data.quantity}{' '}
+              owned
+              {summary.data.cost_basis !== undefined && ` · paid ${money(summary.data.cost_basis)}`}
+              {!!summary.data.unpriced && ` · ${summary.data.unpriced} unpriced`}
             </span>
           )}
           <div className="spacer" />
-          <Link to="/import" className="link">
-            Import
-          </Link>
-          <details className="dropdown">
-            <summary>Export ▾</summary>
-            <div className="menu">
-              <p className="muted small" style={{ margin: '0 0 0.4rem' }}>
-                Items matching the current filters
-              </p>
-              <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'csv' })}`} download>
-                CSV (spreadsheet)
-              </a>
-              <br />
-              <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'json' })}`} download>
-                JSON
-              </a>
-            </div>
-          </details>
-          <button onClick={() => setEditing('new')}>+ Add item</button>
+          {readOnly ? (
+            <Link to="/shared" className="link">
+              All shared collections
+            </Link>
+          ) : (
+            <>
+              <Link to="/import" className="link">
+                Import
+              </Link>
+              <details className="dropdown">
+                <summary>Export ▾</summary>
+                <div className="menu">
+                  <p className="muted small" style={{ margin: '0 0 0.4rem' }}>
+                    Items matching the current filters
+                  </p>
+                  <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'csv' })}`} download>
+                    CSV (spreadsheet)
+                  </a>
+                  <br />
+                  <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'json' })}`} download>
+                    JSON
+                  </a>
+                </div>
+              </details>
+              <button onClick={() => setEditing('new')}>+ Add item</button>
+            </>
+          )}
         </div>
 
-        {selected.size > 0 && (
+        {!readOnly && selected.size > 0 && (
           <div className="bulkbar">
             <strong>{selected.size} selected</strong>
             <select
@@ -321,14 +343,16 @@ export default function CollectionPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
-                    aria-label="Select all"
-                  />
-                </th>
+                {!readOnly && (
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
+                      aria-label="Select all"
+                    />
+                  </th>
+                )}
                 {header('title', 'Title')}
                 {header('platform', 'Platform')}
                 {header('brand', 'Brand')}
@@ -337,26 +361,32 @@ export default function CollectionPage() {
                 <th>Qty</th>
                 {header('market_price', 'Market', 'num')}
                 {header('value', 'Value', 'num')}
-                {header('purchase_price', 'Paid')}
-                {header('purchase_date', 'Bought')}
+                {showPaid && header('purchase_price', 'Paid')}
+                {showPaid && header('purchase_date', 'Bought')}
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((item) => (
-                <tr key={item.id} className="clickable" onClick={() => setEditing(item)}>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(item.id)}
-                      onChange={(e) => {
-                        const next = new Set(selected)
-                        if (e.target.checked) next.add(item.id)
-                        else next.delete(item.id)
-                        setSelected(next)
-                      }}
-                    />
-                  </td>
+                <tr
+                  key={item.id}
+                  className={readOnly ? '' : 'clickable'}
+                  onClick={readOnly ? undefined : () => setEditing(item)}
+                >
+                  {!readOnly && (
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(item.id)}
+                        onChange={(e) => {
+                          const next = new Set(selected)
+                          if (e.target.checked) next.add(item.id)
+                          else next.delete(item.id)
+                          setSelected(next)
+                        }}
+                      />
+                    </td>
+                  )}
                   <td className="title-cell">
                     {item.product.has_image ? (
                       <img className="thumb" src={`/api/products/${item.product.id}/image`} alt="" loading="lazy" />
@@ -364,7 +394,7 @@ export default function CollectionPage() {
                       <span className="thumb" />
                     )}
                     {item.product.title}
-                    {!item.product.pricecharting_id && (
+                    {!readOnly && !item.product.pricecharting_id && (
                       <span className="tag" title="Not linked to PriceCharting">
                         unlinked
                       </span>
@@ -384,15 +414,15 @@ export default function CollectionPage() {
                   <td className="num">
                     <strong>{money(item.value)}</strong>
                   </td>
-                  <td className="num">{money(item.purchase_price)}</td>
-                  <td>{item.purchase_date ?? ''}</td>
+                  {showPaid && <td className="num">{money(item.purchase_price)}</td>}
+                  {showPaid && <td>{item.purchase_date ?? ''}</td>}
                   <td>{STATUSES[item.status]}</td>
                 </tr>
               ))}
               {!items.isLoading && rows.length === 0 && (
                 <tr>
                   <td colSpan={12} className="muted empty">
-                    Nothing here yet. Add an item or loosen the filters.
+                    {readOnly ? 'No items match these filters.' : 'Nothing here yet. Add an item or loosen the filters.'}
                   </td>
                 </tr>
               )}

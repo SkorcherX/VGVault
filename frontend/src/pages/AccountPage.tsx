@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { api, type User } from '../api'
 import { ErrorText, Field } from '../components'
 import NotificationSettings from './NotificationSettings'
+import SharingSettings from './SharingSettings'
 
 export default function AccountPage({ user }: { user: User }) {
   const [current, setCurrent] = useState('')
@@ -46,6 +47,7 @@ export default function AccountPage({ user }: { user: User }) {
           Update password
         </button>
       </form>
+      <SharingSettings />
       <NotificationSettings />
     </div>
   )

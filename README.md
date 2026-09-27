@@ -10,6 +10,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the full design and roadmap.
 - Phase 3: analytics dashboard — value/cost KPIs, value over time, value by brand/platform/era/media/category/condition/genre (click to drill down), most valuable items, biggest movers over 7d/30d/90d/1y.
 - Phase 4: price alerts (Apprise), scheduled backups & CSV/JSON export, UPC barcode scanning, CSV import with PriceCharting auto-link, sort by market value.
 
+## Sharing
+
+Collections are private by default. Under *Account → Sharing* a user can let other signed-in users of the same VGVault browse their collection read-only (the *Shared* page). It is never public on the internet. Notes and storage locations are always private; purchase/sold prices and dates and wishlist targets are shown only if the owner also ticks "show what I paid". Admins get no special view of collections that aren't shared.
+
 ## Price alerts
 
 Each user can add [Apprise URLs](https://github.com/caronc/apprise/wiki#notification-services) under *Account* (Discord, ntfy, email, Telegram, ...). After each scheduled price update they get one message listing owned items that moved by a chosen percentage, and wishlist items that dropped to their target price.

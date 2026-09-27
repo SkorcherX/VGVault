@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import admin, analytics, auth, backups, catalog, collection, imports, prices, users
+from app.api import admin, analytics, auth, backups, catalog, collection, imports, prices, sharing, users
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.migrate import run_migrations
@@ -35,7 +35,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="VGVault", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json")
 
-for module in (auth, users, catalog, collection, prices, admin, analytics, backups, imports):
+for module in (auth, users, catalog, collection, prices, admin, analytics, backups, imports, sharing):
     app.include_router(module.router, prefix="/api")
 
 

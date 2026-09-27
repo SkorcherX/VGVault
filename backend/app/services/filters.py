@@ -39,6 +39,13 @@ class ItemFilters:
         self.handheld = handheld
         self.tag = tag
         self.location = location
+        # Shared (read-only) views must not let viewers probe private notes via search.
+        self.search_notes = True
+
+    @classmethod
+    def none(cls) -> "ItemFilters":
+        """No filtering. (Calling cls() directly outside FastAPI would keep Query() markers.)"""
+        return cls(None, [], [], [], [], [], [], [], [], None, None, None)
 
     def apply(self, stmt: Select) -> Select:
         """Apply to a query that already joins CollectionItem -> Product -> Platform."""
@@ -64,7 +71,10 @@ class ItemFilters:
             stmt = stmt.where(Platform.handheld == self.handheld)
         if self.q:
             like = f"%{self.q}%"
-            stmt = stmt.where(or_(Product.title.ilike(like), CollectionItem.notes.ilike(like)))
+            if self.search_notes:
+                stmt = stmt.where(or_(Product.title.ilike(like), CollectionItem.notes.ilike(like)))
+            else:
+                stmt = stmt.where(Product.title.ilike(like))
         if self.tag:
             # Tags are a JSON list; match the serialized element in its text form.
             stmt = stmt.where(cast(CollectionItem.tags, String).like(f"%{json.dumps(self.tag)}%"))

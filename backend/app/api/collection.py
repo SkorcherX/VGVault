@@ -64,17 +64,11 @@ def _check_product(db: DB, product_id: int | None) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown product")
 
 
-@router.get("", response_model=ItemPage)
-def list_items(
-    db: DB,
-    user: CurrentUser,
-    filters: Filters,
-    sort: str = "title",
-    order: Literal["asc", "desc"] = "asc",
-    offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-):
-    stmt = items_query(user.id, filters)
+def query_items(
+    db: DB, owner_id: int, filters, sort: str, order: str, offset: int, limit: int
+) -> tuple[list[CollectionItem], int]:
+    """One page of an owner's items (priced), plus the total matching count."""
+    stmt = items_query(owner_id, filters)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     if sort in ("market_price", "value"):
         stmt, price = _join_latest_price(stmt)
@@ -83,16 +77,15 @@ def list_items(
         column = SORTS.get(sort, Product.title)
     ordered = column.desc().nulls_last() if order == "desc" else column.asc().nulls_last()
     stmt = stmt.order_by(ordered, CollectionItem.id).offset(offset).limit(limit)
-    return ItemPage(items=attach_prices(db, db.scalars(stmt).unique()), total=total)
+    return attach_prices(db, db.scalars(stmt).unique()), total
 
 
-@router.get("/facets", response_model=Facets)
-def facets(db: DB, user: CurrentUser):
+def build_facets(db: DB, owner_id: int) -> Facets:
     rows = db.execute(
         select(Platform, Product.region, CollectionItem.tags, CollectionItem.location)
         .join(Product, Product.platform_id == Platform.id)
         .join(CollectionItem, CollectionItem.product_id == Product.id)
-        .where(CollectionItem.user_id == user.id)
+        .where(CollectionItem.user_id == owner_id)
     ).all()
     platforms = {p.id: p for p, *_ in rows}
     return Facets(
@@ -103,6 +96,25 @@ def facets(db: DB, user: CurrentUser):
         tags=sorted({t for _, _, tags, _ in rows for t in (tags or [])}),
         locations=sorted({loc for *_, loc in rows if loc}),
     )
+
+
+@router.get("", response_model=ItemPage)
+def list_items(
+    db: DB,
+    user: CurrentUser,
+    filters: Filters,
+    sort: str = "title",
+    order: Literal["asc", "desc"] = "asc",
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    items, total = query_items(db, user.id, filters, sort, order, offset, limit)
+    return ItemPage(items=items, total=total)
+
+
+@router.get("/facets", response_model=Facets)
+def facets(db: DB, user: CurrentUser):
+    return build_facets(db, user.id)
 
 
 EXPORT_FIELDS = [

@@ -9,6 +9,7 @@ import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import PlatformsPage from './pages/PlatformsPage'
 import ScraperPage from './pages/ScraperPage'
+import { SharedCollectionRoute, SharedListPage } from './pages/SharedPage'
 import SetupPage from './pages/SetupPage'
 import UsersPage from './pages/UsersPage'
 
@@ -47,6 +48,9 @@ function Shell({ user }: { user: User }) {
         <nav>
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>
+          <NavLink to="/shared" end={false}>
+            Shared
+          </NavLink>
           <NavLink to="/platforms">Platforms</NavLink>
           {user.role === 'admin' && (
             <>
@@ -70,6 +74,8 @@ function Shell({ user }: { user: User }) {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/collection" element={<CollectionPage />} />
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/shared" element={<SharedListPage />} />
+          <Route path="/shared/:id" element={<SharedCollectionRoute />} />
           <Route path="/platforms" element={<PlatformsPage isAdmin={user.role === 'admin'} />} />
           <Route path="/account" element={<AccountPage user={user} />} />
           {user.role === 'admin' && <Route path="/admin/users" element={<UsersPage me={user} />} />}

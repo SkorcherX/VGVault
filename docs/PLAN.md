@@ -127,11 +127,9 @@ docker-compose.yml  (local dev)
 4. **Polish**: wishlist targets, notifications, backups/export, barcode (UPC) lookup, unRAID CA submission.
 5. **Import collection** (to be designed): support multiple source formats (PriceCharting export, spreadsheets, others) with a mapping/review step.
 
-## Open questions
-
-- Should users be able to see each other's collections (opt-in sharing)?
-
 ## Resolved
+
+- Sharing: opt-in, read-only, signed-in users only; notes/location never shared; prices paid only with a second opt-in.
 
 - Currency: USD only (PriceCharting's currency).
 - Regions: PAL and Japanese releases are separate platforms, each mapped to its PriceCharting console.

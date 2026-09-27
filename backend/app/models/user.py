@@ -20,6 +20,10 @@ class User(Base):
     token_version: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
     notify: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Opt-in: other signed-in users may view this collection (read-only).
+    share_collection: Mapped[bool] = mapped_column(default=False)
+    # ...and also see purchase/sold prices and dates.
+    share_paid: Mapped[bool] = mapped_column(default=False)
 
     @property
     def is_admin(self) -> bool:
