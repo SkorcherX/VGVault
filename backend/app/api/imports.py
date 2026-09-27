@@ -1,11 +1,15 @@
 from typing import Literal
+from zipfile import BadZipFile
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
+from openpyxl.utils.exceptions import InvalidFileException
 from pydantic import BaseModel, Field
 
 from app.api.deps import DB, CurrentUser
 from app.models.enums import Category, Condition, ItemStatus
 from app.services import autolink, importer
+from app.services.workbook import read_workbook
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -19,9 +23,10 @@ class ImportBody(BaseModel):
     default_condition: Condition = Condition.loose
     default_platform_id: int | None = None
     default_category: Category = Category.game
-    day_first: bool = False
+    day_first: bool | None = None  # None: auto-detect from the dates
     skip_duplicates: bool = True
     default_region: Literal["NTSC-U", "PAL", "NTSC-J"] = "NTSC-U"
+    prices_per_row: bool = False
 
     def options(self) -> importer.Options:
         unknown = set(self.mapping) - set(importer.FIELDS)
@@ -36,6 +41,7 @@ class ImportBody(BaseModel):
             day_first=self.day_first,
             skip_duplicates=self.skip_duplicates,
             default_region=self.default_region,
+            prices_per_row=self.prices_per_row,
         )
 
     def clean_rows(self) -> list[dict[str, str]]:
@@ -44,6 +50,7 @@ class ImportBody(BaseModel):
 
 class SuggestBody(BaseModel):
     headers: list[str]
+    rows: list[dict[str, str | None]] = Field(default=[], max_length=500)  # sample, for value-based guesses
 
 
 @router.get("/fields")
@@ -53,7 +60,26 @@ def fields(_: CurrentUser):
 
 @router.post("/suggest")
 def suggest(body: SuggestBody, _: CurrentUser):
-    return importer.suggest_mapping(body.headers)
+    rows = [{k: v or "" for k, v in r.items()} for r in body.rows]
+    return importer.suggest_mapping(body.headers, rows)
+
+
+MAX_WORKBOOK_BYTES = 25 * 1024 * 1024
+
+
+@router.post("/workbook")
+async def workbook(file: UploadFile, _: CurrentUser):
+    """Parse an .xlsx into per-sheet headers and rows (the browser then maps and validates)."""
+    data = await file.read(MAX_WORKBOOK_BYTES + 1)
+    if len(data) > MAX_WORKBOOK_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Workbook is larger than 25 MB")
+    try:
+        sheets = await run_in_threadpool(read_workbook, data)
+    except (InvalidFileException, BadZipFile, KeyError, ValueError) as e:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"Couldn't read that file as an Excel workbook: {e}"
+        ) from None
+    return {"sheets": sheets}
 
 
 @router.post("/validate")

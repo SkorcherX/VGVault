@@ -88,6 +88,7 @@ export interface ItemFields {
   sold_date: string | null
   target_price: string | null
   location: string | null
+  acquired_from: string | null
   tags: string[]
   notes: string | null
 }
@@ -195,6 +196,7 @@ export interface Facets {
   regions: string[]
   tags: string[]
   locations: string[]
+  sources: string[]
 }
 
 export class ApiError extends Error {

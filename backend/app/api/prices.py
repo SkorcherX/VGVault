@@ -58,10 +58,11 @@ def search(
     except PriceProviderError as e:
         raise _provider_error(e) from None
 
-    slug_to_platform = {
-        p.pricecharting_slug: p.id
-        for p in db.scalars(select(Platform).where(Platform.pricecharting_slug.is_not(None)))
-    }
+    slug_to_platform: dict[str, int] = {}
+    for p in db.scalars(
+        select(Platform).where(Platform.pricecharting_slug.is_not(None)).order_by(Platform.id)
+    ):
+        slug_to_platform.setdefault(p.pricecharting_slug, p.id)  # oldest platform wins if a console is shared
     known = dict(
         db.execute(
             select(Product.pricecharting_id, Product.id).where(

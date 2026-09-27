@@ -114,3 +114,16 @@ def test_fetch_rejects_other_hosts():
     provider, _ = _provider(lambda r: httpx.Response(200))
     with pytest.raises(Exception, match="Not a PriceCharting"):
         provider.fetch("https://evil.example.com/game/x/y")
+
+
+def test_fetch_moved_page_redirecting_to_search_is_not_found():
+    def handler(request):
+        if request.url.path.startswith("/game/"):
+            return httpx.Response(
+                302, headers={"Location": "https://www.pricecharting.com/search-products?q=x"}
+            )
+        return httpx.Response(200, text=fixture("pc_search_super_metroid.html"))
+
+    provider, _ = _provider(handler)
+    with pytest.raises(NotFoundError):
+        provider.fetch("https://www.pricecharting.com/game/xbox/everything-or-nothing")

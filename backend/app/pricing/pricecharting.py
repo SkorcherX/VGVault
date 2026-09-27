@@ -294,6 +294,11 @@ class PriceChartingProvider:
         if not is_pricecharting_url(url):
             raise PriceProviderError("Not a PriceCharting product URL")
         resp = self._get(url)
+        if not urlparse(str(resp.url)).path.startswith("/game/"):
+            # Renamed pages redirect to a search for the old name.
+            raise NotFoundError(
+                "PriceCharting page has moved (redirected to a search)", status=resp.status_code
+            )
         return parse_product_page(resp.text, str(resp.url))
 
     def download(self, url: str) -> bytes:
@@ -301,6 +306,21 @@ class PriceChartingProvider:
         resp = self._client.get(url)
         resp.raise_for_status()
         return resp.content
+
+
+PC_HOSTS = ("pricecharting.com", "www.pricecharting.com", "videogames.pricecharting.com")
+
+
+def normalize_pricecharting_url(url: str) -> str | None:
+    """Canonical https://www.pricecharting.com/game/<console>/<slug> for current and legacy links
+    (http, the old videogames. subdomain, search ?q= suffixes). None if not a game page."""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() not in PC_HOSTS:
+        return None
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) != 3 or parts[0] != "game":
+        return None
+    return f"{BASE_URL}/game/{parts[1]}/{parts[2]}"
 
 
 def is_pricecharting_url(url: str) -> bool:

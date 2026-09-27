@@ -26,6 +26,7 @@ class ItemFilters:
         handheld: bool | None = None,
         tag: str | None = None,
         location: str | None = None,
+        acquired_from: str | None = None,
     ):
         self.q = q
         self.status = status_
@@ -39,13 +40,14 @@ class ItemFilters:
         self.handheld = handheld
         self.tag = tag
         self.location = location
+        self.acquired_from = acquired_from
         # Shared (read-only) views must not let viewers probe private notes via search.
         self.search_notes = True
 
     @classmethod
     def none(cls) -> "ItemFilters":
         """No filtering. (Calling cls() directly outside FastAPI would keep Query() markers.)"""
-        return cls(None, [], [], [], [], [], [], [], [], None, None, None)
+        return cls(None, [], [], [], [], [], [], [], [], None, None, None, None)
 
     def apply(self, stmt: Select) -> Select:
         """Apply to a query that already joins CollectionItem -> Product -> Platform."""
@@ -80,6 +82,8 @@ class ItemFilters:
             stmt = stmt.where(cast(CollectionItem.tags, String).like(f"%{json.dumps(self.tag)}%"))
         if self.location:
             stmt = stmt.where(CollectionItem.location == self.location)
+        if self.acquired_from:
+            stmt = stmt.where(CollectionItem.acquired_from == self.acquired_from)
         return stmt
 
 

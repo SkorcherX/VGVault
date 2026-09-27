@@ -38,7 +38,7 @@ platforms:
   - [Sega Saturn, saturn, Sega, 5, disc, false, 1995, sega-saturn]
   - [Sega Dreamcast, dreamcast, Sega, 6, disc, false, 1999, sega-dreamcast]
   - [Sega Game Gear, game-gear, Sega, 4, cartridge, true, 1991, sega-game-gear]
-  - [Sega Nomad, nomad, Sega, 4, cartridge, true, 1995, sega-genesis]
+  - [Sega Nomad, nomad, Sega, 4, cartridge, true, 1995, null]  # plays Genesis games; they belong to Genesis
   # --- Microsoft
   - [Xbox, xbox, Microsoft, 6, disc, false, 2001, xbox]
   - [Xbox 360, xbox-360, Microsoft, 7, disc, false, 2005, xbox-360]

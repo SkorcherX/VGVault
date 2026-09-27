@@ -35,6 +35,7 @@ const DEFAULTS: ItemFields = {
   sold_date: null,
   target_price: null,
   location: null,
+  acquired_from: null,
   tags: [],
   notes: null,
 }
@@ -226,6 +227,15 @@ export default function ItemDialog({
           )}
           <Field label="Location">
             <input value={fields.location ?? ''} onChange={(e) => set('location', str(e.target.value))} />
+          </Field>
+          <Field label="Bought from">
+            <input
+              value={fields.acquired_from ?? ''}
+              onChange={(e) => set('acquired_from', str(e.target.value))}
+              placeholder="Game store, eBay, garage sale…"
+              maxLength={64}
+              list="sources"
+            />
           </Field>
           <Field label="Tags (comma separated)">
             <input value={tagText} onChange={(e) => setTagText(e.target.value)} />

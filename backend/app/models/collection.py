@@ -31,6 +31,7 @@ class CollectionItem(Base):
     sold_date: Mapped[date | None]
     target_price: Mapped[Decimal | None] = mapped_column(Money)
     location: Mapped[str | None] = mapped_column(String(128))
+    acquired_from: Mapped[str | None] = mapped_column(String(64))  # e.g. Game Store, eBay
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))

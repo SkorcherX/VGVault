@@ -89,7 +89,8 @@ textarea {
   padding: 0.4rem 0.55rem;
   width: 100%;
 }
-input[type='checkbox'] {
+input[type='checkbox'],
+input[type='radio'] {
   width: auto;
   accent-color: var(--accent-fill);
 }
@@ -1089,4 +1090,31 @@ code {
 }
 .auth .vg {
   color: var(--accent);
+}
+.sheet-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.sheet-group.on {
+  border-color: var(--accent);
+}
+.sheet-group > .check {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.sheet-group > .check .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.sheet-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.2rem 1rem;
+  margin: 0.6rem 0 0 1.5rem;
 }

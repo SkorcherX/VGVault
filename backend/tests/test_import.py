@@ -89,8 +89,9 @@ def test_validate_reports_per_row(admin):
     assert not res[3]["ok"] and "unknown platform" in res[3]["errors"][0]
     assert not res[4]["ok"] and res[4]["errors"] == ["missing title"]
     assert not res[5]["ok"] and "purchase price" in res[5]["errors"][0]
-    assert res[6]["duplicate"] and "duplicate row" in res[6]["warnings"]
-    assert r["summary"] == {"total": 7, "ok": 4, "errors": 3, "duplicates": 1, "new_products": 3}
+    # a repeated row is imported (likely a second copy), with a warning
+    assert not res[6]["duplicate"] and "appears more than once in the file" in res[6]["warnings"]
+    assert r["summary"] == {"total": 7, "ok": 4, "errors": 3, "duplicates": 0, "new_products": 3}
 
 
 def test_default_platform_rescues_unknown(admin):
@@ -232,3 +233,44 @@ def test_find_match_word_order_and_ambiguity():
     # two different word-order matches -> ambiguous, left for the user
     assert _find_match(P([hit("007 GoldenEye"), hit("007 - GoldenEye")]), Prod()) is None
     assert _find_match(P([hit("GoldenEye 007 Reloaded")]), Prod()) is None
+
+
+def test_prices_per_row(admin):
+    rows = [row("Halo", "Xbox", paid="10", qty="2")]
+    admin.post("/api/import/commit", json=body(rows, prices_per_row=True))
+    item = admin.get("/api/collection").json()["items"][0]
+    assert item["quantity"] == 2 and item["purchase_price"] == "5.00"  # stored per copy
+
+
+def test_autolink_recovers_moved_link_by_title(admin):
+    from app.pricing.base import NotFoundError
+
+    class Moved(LinkProvider):
+        def fetch(self, url):
+            if url.endswith("/everything-or-nothing"):
+                raise NotFoundError("moved")
+            return super().fetch(url)
+
+    provider = Moved()
+    pricing.set_provider(provider)
+    try:
+        rows = [
+            {
+                **row("Super Mario 64", "N64"),
+                "Link": "https://www.pricecharting.com/game/nintendo-64/everything-or-nothing",
+            }
+        ]
+        admin.post(
+            "/api/import/commit", json={"rows": rows, "mapping": {**MAPPING, "pricecharting_url": "Link"}}
+        )
+        admin.post("/api/import/autolink")
+        for _ in range(100):
+            status = admin.get("/api/import/autolink").json()
+            if not status["running"]:
+                break
+            time.sleep(0.05)
+        assert status["linked"] == 1 and status["unmatched"] == []
+        item = admin.get("/api/collection").json()["items"][0]
+        assert item["product"]["pricecharting_url"].endswith("/nintendo-64/super-mario-64")
+    finally:
+        pricing.set_provider(None)

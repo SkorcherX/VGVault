@@ -23,7 +23,7 @@ def test_seeded_regional_platforms(admin):
     # every PriceCharting console slug maps to exactly one platform
     slugs = [x["pricecharting_slug"] for x in p.values() if x["pricecharting_slug"]]
     dupes = {s for s in slugs if slugs.count(s) > 1}
-    assert dupes <= {"sega-genesis"}  # Nomad intentionally shares the Genesis library
+    assert dupes == set()  # e.g. the Nomad plays Genesis games but doesn't claim their console
 
 
 @pytest.mark.parametrize(

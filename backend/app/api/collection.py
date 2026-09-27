@@ -82,7 +82,13 @@ def query_items(
 
 def build_facets(db: DB, owner_id: int) -> Facets:
     rows = db.execute(
-        select(Platform, Product.region, CollectionItem.tags, CollectionItem.location)
+        select(
+            Platform,
+            Product.region,
+            CollectionItem.tags,
+            CollectionItem.location,
+            CollectionItem.acquired_from,
+        )
         .join(Product, Product.platform_id == Platform.id)
         .join(CollectionItem, CollectionItem.product_id == Product.id)
         .where(CollectionItem.user_id == owner_id)
@@ -92,9 +98,10 @@ def build_facets(db: DB, owner_id: int) -> Facets:
         brands=sorted({p.brand for p in platforms.values()}),
         eras=sorted({p.era for p in platforms.values() if p.era}),
         platforms=[{"id": p.id, "name": p.name} for p in sorted(platforms.values(), key=lambda p: p.name)],
-        regions=sorted({r for _, r, _, _ in rows if r} | {p.region for p in platforms.values()}),
-        tags=sorted({t for _, _, tags, _ in rows for t in (tags or [])}),
-        locations=sorted({loc for *_, loc in rows if loc}),
+        regions=sorted({r for _, r, *_ in rows if r} | {p.region for p in platforms.values()}),
+        tags=sorted({t for _, _, tags, *_ in rows for t in (tags or [])}),
+        locations=sorted({loc for _, _, _, loc, _ in rows if loc}),
+        sources=sorted({src for *_, src in rows if src}),
     )
 
 
@@ -121,7 +128,7 @@ EXPORT_FIELDS = [
     "title", "platform", "brand", "category", "region", "status", "condition", "quantity",
     "has_item", "has_box", "has_manual", "has_inserts", "grade",
     "purchase_price", "purchase_date", "sold_price", "sold_date", "target_price",
-    "location", "tags", "notes", "market_price", "value", "priced_on",
+    "location", "acquired_from", "tags", "notes", "market_price", "value", "priced_on",
     "pricecharting_id", "pricecharting_url", "upc",
 ]  # fmt: skip
 
@@ -148,6 +155,7 @@ def _export_row(item) -> dict:
         "sold_date": item.sold_date,
         "target_price": item.target_price,
         "location": item.location,
+        "acquired_from": item.acquired_from,
         "tags": item.tags or [],
         "notes": item.notes,
         "market_price": item.market_price,

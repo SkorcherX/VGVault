@@ -35,6 +35,7 @@ const FIELD_LABELS: Record<string, string> = {
   sold_date: 'Sold date',
   target_price: 'Target price',
   location: 'Location',
+  acquired_from: 'Bought from (store, eBay…)',
   tags: 'Tags',
   notes: 'Notes',
   pricecharting_url: 'PriceCharting URL',
@@ -69,6 +70,20 @@ interface CommitResult {
   unlinked: number
 }
 
+interface Sheet {
+  name: string
+  hidden: boolean
+  header_row: number | null
+  headers: string[]
+  rows: Row[]
+  row_numbers: number[]
+}
+
+/** Sheets with the same columns (ignoring link and sheet-name columns) import together. */
+const layoutOf = (s: Sheet) => s.headers.filter((h) => !h.endsWith(' (link)') && h !== 'Sheet name').join('|')
+
+const isExcel = (f: File) => /\.(xlsx|xlsm)$/i.test(f.name)
+
 export default function ImportPage() {
   const qc = useQueryClient()
   const [fileName, setFileName] = useState<string | null>(null)
@@ -76,24 +91,35 @@ export default function ImportPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
   const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [sheets, setSheets] = useState<Sheet[] | null>(null)
+  const [layout, setLayout] = useState<string | null>(null)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [reading, setReading] = useState(false)
+  // Where each row came from, for messages: "NES row 5" (workbook) or "row 5" (CSV, header on row 1)
+  const [rowLabels, setRowLabels] = useState<string[]>([])
   const [defaults, setDefaults] = useState({
     default_status: 'owned' as ItemStatus,
     default_condition: 'loose' as Condition,
     default_category: 'game' as Category,
     default_platform_id: '' as number | '',
-    day_first: false,
+    date_order: 'auto' as 'auto' | 'dmy' | 'mdy',
     skip_duplicates: true,
     default_region: 'NTSC-U' as 'NTSC-U' | 'PAL' | 'NTSC-J',
+    prices_per_row: false,
   })
   const [problemsOnly, setProblemsOnly] = useState(false)
 
   const platforms = useQuery({ queryKey: ['platforms'], queryFn: () => api.get<Platform[]>('/platforms') })
-  const payload = () => ({
-    rows,
-    mapping,
-    ...defaults,
-    default_platform_id: defaults.default_platform_id || null,
-  })
+  const payload = () => {
+    const { date_order, ...rest } = defaults
+    return {
+      rows,
+      mapping,
+      ...rest,
+      day_first: date_order === 'auto' ? null : date_order === 'dmy',
+      default_platform_id: defaults.default_platform_id || null,
+    }
+  }
   const validate = useMutation({ mutationFn: () => api.post<ValidateResult>('/import/validate', payload()) })
   const commit = useMutation({
     mutationFn: () => api.post<CommitResult>('/import/commit', payload()),
@@ -106,10 +132,59 @@ export default function ImportPage() {
     },
   })
 
-  const onFile = (file: File) => {
-    setParseError(null)
+  /** Load parsed rows into the mapper, with a mapping suggestion based on headers and cell values. */
+  const loadRows = async (fields: string[], data: Row[]) => {
     validate.reset()
     commit.reset()
+    setHeaders(fields)
+    setRows(data)
+    setMapping(await api.post<Record<string, string>>('/import/suggest', { headers: fields, rows: data.slice(0, 300) }))
+  }
+
+  const pickLayout = (key: string, all: Sheet[]) => {
+    setLayout(key)
+    // Hidden tabs are often templates or scratch space: offer them, but don't tick them.
+    setPicked(new Set(all.filter((s) => layoutOf(s) === key && s.rows.length > 0 && !s.hidden).map((s) => s.name)))
+  }
+
+  const applySheets = () => {
+    const chosen = (sheets ?? []).filter((s) => picked.has(s.name))
+    const fields = [...new Set(chosen.flatMap((s) => s.headers))].filter((h) => h !== 'Sheet name')
+    setRowLabels(chosen.flatMap((s) => s.row_numbers.map((n) => `${s.name} row ${n}`)))
+    loadRows([...fields, 'Sheet name'], chosen.flatMap((s) => s.rows))
+  }
+
+  const onFile = async (file: File) => {
+    setParseError(null)
+    setSheets(null)
+    setHeaders([])
+    setRows([])
+    validate.reset()
+    commit.reset()
+    setFileName(file.name)
+    if (isExcel(file)) {
+      setReading(true)
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch('/api/import/workbook', { method: 'POST', body: form, credentials: 'same-origin' })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail ?? res.statusText)
+        const all: Sheet[] = data.sheets
+        const withRows = all.filter((s) => s.rows.length > 0)
+        if (withRows.length === 0) throw new Error('No sheets with a recognizable header row and data.')
+        setSheets(all)
+        // Start with the layout covering the most rows (e.g. all the per-platform game tabs).
+        const counts = new Map<string, number>()
+        for (const s of withRows) counts.set(layoutOf(s), (counts.get(layoutOf(s)) ?? 0) + s.rows.length)
+        pickLayout([...counts.entries()].sort((a, b) => b[1] - a[1])[0][0], all)
+      } catch (e) {
+        setParseError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setReading(false)
+      }
+      return
+    }
     Papa.parse<Row>(file, {
       header: true,
       skipEmptyLines: 'greedy',
@@ -120,10 +195,8 @@ export default function ImportPage() {
           setParseError('No rows found. The first line must be column headers.')
           return
         }
-        setFileName(file.name)
-        setHeaders(fields)
-        setRows(res.data)
-        setMapping(await api.post<Record<string, string>>('/import/suggest', { headers: fields }))
+        setRowLabels(res.data.map((_, i) => `row ${i + 2}`))
+        loadRows(fields, res.data)
       },
       error: (err) => setParseError(err.message),
     })
@@ -165,21 +238,45 @@ export default function ImportPage() {
       <section className="card">
         <h2>1. Choose a file</h2>
         <p className="muted small">
-          A CSV exported from a spreadsheet, another tracker, or VGVault itself. The first line must be column headers;
-          one row per item.
+          An Excel workbook (.xlsx) or CSV from a spreadsheet, another tracker, or VGVault itself: one row per item.
+          Workbooks can have a tab per platform and a header row further down; hyperlinks to PriceCharting are picked
+          up automatically.
         </p>
         <input
           type="file"
-          accept=".csv,.tsv,.txt,text/csv"
+          accept=".xlsx,.xlsm,.csv,.tsv,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
         />
+        {reading && <p className="muted small">Reading workbook…</p>}
         <ErrorText error={parseError} />
-        {fileName && (
+        {fileName && rows.length > 0 && (
           <p className="muted small">
             {fileName}: {rows.length} rows, {headers.length} columns
           </p>
         )}
       </section>
+
+      {sheets && (
+        <SheetPicker
+          sheets={sheets}
+          layout={layout}
+          picked={picked}
+          loaded={rows.length > 0}
+          onLayout={(key) => {
+            pickLayout(key, sheets)
+            setHeaders([])
+            setRows([])
+            validate.reset()
+          }}
+          onToggle={(name) => {
+            const next = new Set(picked)
+            if (next.has(name)) next.delete(name)
+            else next.add(name)
+            setPicked(next)
+          }}
+          onUse={applySheets}
+        />
+      )}
 
       {headers.length > 0 && (
         <section className="card">
@@ -197,7 +294,7 @@ export default function ImportPage() {
                   {headers.map((h) => (
                     <option key={h} value={h}>
                       {h}
-                      {rows[0]?.[h] ? ` (e.g. ${String(rows[0][h]).slice(0, 24)})` : ''}
+                      {example(rows, h) ? ` (e.g. ${example(rows, h)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -269,9 +366,28 @@ export default function ImportPage() {
             </label>
           </div>
           <div className="row">
-            <label className="check">
-              <input type="checkbox" checked={defaults.day_first} onChange={(e) => setDefault('day_first', e.target.checked)} />
-              Dates are day/month/year
+            <label className="row small">
+              Prices paid are
+              <select
+                value={defaults.prices_per_row ? 'row' : 'copy'}
+                onChange={(e) => setDefault('prices_per_row', e.target.value === 'row')}
+                style={{ width: 'auto' }}
+              >
+                <option value="copy">per copy</option>
+                <option value="row">the total for the row</option>
+              </select>
+            </label>
+            <label className="row small">
+              Dates
+              <select
+                value={defaults.date_order}
+                onChange={(e) => setDefault('date_order', e.target.value as typeof defaults.date_order)}
+                style={{ width: 'auto' }}
+              >
+                <option value="auto">Detect automatically</option>
+                <option value="dmy">Day / month / year</option>
+                <option value="mdy">Month / day / year</option>
+              </select>
             </label>
             <label className="check">
               <input
@@ -326,7 +442,7 @@ export default function ImportPage() {
               <tbody>
                 {preview.map((r) => (
                   <tr key={r.index} className={r.ok ? '' : 'row-error'}>
-                    <td className="muted">{r.index + 2}</td>
+                    <td className="muted">{rowLabels[r.index] ?? r.index + 2}</td>
                     <td>{r.title || <span className="muted">—</span>}</td>
                     <td>{r.platform ?? <span className="muted">—</span>}</td>
                     <td>{r.condition ? CONDITIONS[r.condition] : ''}</td>
@@ -352,7 +468,7 @@ export default function ImportPage() {
             </table>
           </div>
           {(validate.data?.rows.length ?? 0) > 300 && <p className="muted small">Showing the first 300 rows.</p>}
-          <p className="muted small">Row numbers match the spreadsheet (header is row 1).</p>
+          <p className="muted small">Row numbers match the spreadsheet.</p>
           <div className="row">
             <button disabled={toImport === 0 || commit.isPending || commit.isSuccess} onClick={() => commit.mutate()}>
               {commit.isPending ? 'Importing…' : `Import ${toImport} item${toImport === 1 ? '' : 's'}`}
@@ -465,6 +581,83 @@ export function AutoLinkPanel() {
           </ul>
         </details>
       )}
+    </section>
+  )
+}
+
+function example(rows: Row[], column: string): string {
+  const row = rows.find((r) => r[column])
+  return row ? String(row[column]).slice(0, 28) : ''
+}
+
+function SheetPicker({
+  sheets,
+  layout,
+  picked,
+  loaded,
+  onLayout,
+  onToggle,
+  onUse,
+}: {
+  sheets: Sheet[]
+  layout: string | null
+  picked: Set<string>
+  loaded: boolean
+  onLayout: (key: string) => void
+  onToggle: (name: string) => void
+  onUse: () => void
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, Sheet[]>()
+    for (const s of sheets.filter((s) => s.rows.length > 0)) {
+      const key = layoutOf(s)
+      map.set(key, [...(map.get(key) ?? []), s])
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length)
+  }, [sheets])
+  const skipped = sheets.filter((s) => s.rows.length === 0)
+  const count = sheets.filter((s) => picked.has(s.name)).reduce((n, s) => n + s.rows.length, 0)
+
+  return (
+    <section className="card">
+      <h2>Choose tabs</h2>
+      <p className="muted small">
+        Tabs with the same columns import together. Import a different layout (like a separate consoles tab) as a
+        second pass afterwards.
+      </p>
+      {groups.map(([key, group]) => (
+        <div key={key} className={`sheet-group ${key === layout ? 'on' : ''}`}>
+          <label className="check">
+            <input type="radio" checked={key === layout} onChange={() => onLayout(key)} />
+            <strong>
+              {group.length} tab{group.length === 1 ? '' : 's'}, {group.reduce((n, s) => n + s.rows.length, 0)} rows
+            </strong>
+            <span className="muted small">
+              {group[0].headers.filter((h) => h !== 'Sheet name').slice(0, 8).join(', ')}
+              {group[0].headers.length > 9 ? ', …' : ''}
+            </span>
+          </label>
+          {key === layout && (
+            <div className="sheet-list">
+              {group.map((s) => (
+                <label key={s.name} className="check small">
+                  <input type="checkbox" checked={picked.has(s.name)} onChange={() => onToggle(s.name)} />
+                  {s.name} <span className="muted">({s.rows.length})</span>
+                  {s.hidden && <span className="tag">hidden</span>}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {skipped.length > 0 && (
+        <p className="muted small">Skipped (no header row or no data): {skipped.map((s) => s.name).join(', ')}</p>
+      )}
+      <div className="row">
+        <button disabled={picked.size === 0} onClick={onUse}>
+          {loaded ? 'Reload' : 'Use'} {picked.size} tab{picked.size === 1 ? '' : 's'} ({count} rows)
+        </button>
+      </div>
     </section>
   )
 }

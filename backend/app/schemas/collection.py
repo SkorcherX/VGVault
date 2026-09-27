@@ -22,6 +22,7 @@ class ItemFields(BaseModel):
     sold_date: date | None = None
     target_price: Decimal | None = Field(default=None, ge=0)
     location: str | None = None
+    acquired_from: str | None = Field(default=None, max_length=64)
     tags: list[str] = []
     notes: str | None = None
 
@@ -48,6 +49,7 @@ class ItemUpdate(BaseModel):
     sold_date: date | None = None
     target_price: Decimal | None = Field(default=None, ge=0)
     location: str | None = None
+    acquired_from: str | None = Field(default=None, max_length=64)
     tags: list[str] | None = None
     notes: str | None = None
 
@@ -82,6 +84,7 @@ class Facets(BaseModel):
     regions: list[str]
     tags: list[str]
     locations: list[str]
+    sources: list[str] = []
 
 
 class Summary(BaseModel):

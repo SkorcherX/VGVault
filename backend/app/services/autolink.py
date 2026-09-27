@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
 from app.models import CollectionItem, Product
-from app.pricing.base import BlockedError, PriceProviderError
+from app.pricing.base import BlockedError, NotFoundError, PriceProviderError
 from app.services import pricing
 from app.services.importer import norm
 from app.services.settings import get_scraper_settings
@@ -118,12 +118,22 @@ def _link_all(db: Session, user_id: int) -> None:
         s.current = product.title
         try:
             url = product.pricecharting_url or _find_match(provider, product)
-            if url is None:
+            page = None
+            if url is not None:
+                try:
+                    page = provider.fetch(url)
+                except NotFoundError:
+                    if not product.pricecharting_url:
+                        raise
+                    # A stored link (e.g. from an import) whose page has moved: search by title instead.
+                    product.pricecharting_url = None
+                    url = _find_match(provider, product)
+                    page = provider.fetch(url) if url else None
+            if page is None:
                 s.unmatched.append(
                     {"product_id": product.id, "title": product.title, "platform": product.platform.name}
                 )
             else:
-                page = provider.fetch(url)
                 clash = db.scalar(
                     select(Product).where(
                         Product.pricecharting_id == page.source_id, Product.id != product.id

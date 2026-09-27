@@ -31,6 +31,7 @@ interface Filters {
   region: string[]
   tag: string
   location: string
+  acquired_from: string
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -45,6 +46,7 @@ const EMPTY_FILTERS: Filters = {
   region: [],
   tag: '',
   location: '',
+  acquired_from: '',
 }
 
 const FILTERS_KEY = 'vgvault.filters'
@@ -231,6 +233,17 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
               <option value="">Any</option>
               {f.tags.map((t) => (
                 <option key={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {f && f.sources?.length > 0 && (
+          <label className="field">
+            <span>Bought from</span>
+            <select value={filters.acquired_from} onChange={(e) => update({ acquired_from: e.target.value })}>
+              <option value="">Any</option>
+              {f.sources.map((src) => (
+                <option key={src}>{src}</option>
               ))}
             </select>
           </label>
@@ -444,6 +457,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         </div>
       </section>
 
+      <datalist id="sources">
+        {f?.sources?.map((src) => <option key={src} value={src} />)}
+      </datalist>
       {editing && (
         <ItemDialog
           item={editing === 'new' ? null : editing}

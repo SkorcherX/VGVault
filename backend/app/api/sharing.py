@@ -20,7 +20,7 @@ from app.services.filters import Filters, ItemFilters
 
 router = APIRouter(tags=["sharing"])
 
-ALWAYS_PRIVATE = {"notes": None, "location": None}
+ALWAYS_PRIVATE = {"notes": None, "location": None, "acquired_from": None}
 PAID_FIELDS = {
     "purchase_price": None,
     "purchase_date": None,
@@ -115,6 +115,7 @@ def shared_collection(
     if not owner.share_paid and sort in ("purchase_price", "purchase_date"):
         sort = "title"  # don't leak the order of hidden values
     filters.location = None
+    filters.acquired_from = None
     filters.search_notes = False
     items, total = query_items(db, owner.id, filters, sort, order, offset, limit)
     return SharedPage(
@@ -128,7 +129,7 @@ def shared_collection(
 @router.get("/shared/{owner_id}/facets", response_model=Facets)
 def shared_facets(owner_id: int, db: DB, viewer: CurrentUser):
     owner = _owner(db, owner_id, viewer)
-    return build_facets(db, owner.id).model_copy(update={"locations": []})
+    return build_facets(db, owner.id).model_copy(update={"locations": [], "sources": []})
 
 
 @router.get("/shared/{owner_id}/summary")

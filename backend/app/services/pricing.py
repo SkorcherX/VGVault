@@ -147,7 +147,10 @@ def refresh_product(db: Session, product: Product) -> None:
 
 def resolve_platform(db: Session, console_slug: str | None, fallback_id: int | None) -> Platform | None:
     if console_slug:
-        platform = db.scalar(select(Platform).where(Platform.pricecharting_slug == console_slug).limit(1))
+        # Oldest first: Genesis, not Nomad, for PriceCharting's shared sega-genesis console.
+        platform = db.scalar(
+            select(Platform).where(Platform.pricecharting_slug == console_slug).order_by(Platform.id).limit(1)
+        )
         if platform:
             return platform
     return db.get(Platform, fallback_id) if fallback_id else None

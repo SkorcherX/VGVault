@@ -9,19 +9,20 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from urllib.parse import unquote
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import CollectionItem, Platform, Product
 from app.models.enums import Category, Condition, ItemStatus
-from app.pricing.pricecharting import console_slug_from_url, is_pricecharting_url
+from app.pricing.pricecharting import console_slug_from_url, normalize_pricecharting_url
 
 FIELDS = [
     "title", "platform", "category", "region", "status", "condition", "quantity",
     "has_item", "has_box", "has_manual", "has_inserts", "grade",
     "purchase_price", "purchase_date", "sold_price", "sold_date", "target_price",
-    "location", "tags", "notes", "pricecharting_url", "upc",
+    "location", "acquired_from", "tags", "notes", "pricecharting_url", "upc",
 ]  # fmt: skip
 
 # Header names (normalized) that auto-map to a field.
@@ -32,18 +33,38 @@ HEADER_HINTS = {
     "region": ["region"],
     "status": ["status", "list", "ownership"],
     "condition": ["condition", "completeness", "cond"],
-    "quantity": ["quantity", "qty", "count", "copies"],
+    "quantity": ["quantity", "qty", "count", "copies", "amount", "number", "owned"],
     "has_item": ["hasitem", "cart", "cartridge", "disc", "game"],
     "has_box": ["hasbox", "box", "boxed"],
     "has_manual": ["hasmanual", "manual"],
     "has_inserts": ["hasinserts", "inserts"],
     "grade": ["grade"],
     "purchase_price": ["purchaseprice", "price", "paid", "pricepaid", "cost", "pricepaidusd"],
-    "purchase_date": ["purchasedate", "datepurchased", "bought", "dateacquired", "acquired", "date"],
+    "purchase_date": [
+        "purchasedate",
+        "datepurchased",
+        "dateacquired",
+        "acquired",
+        "dateadded",
+        "added",
+        "date",
+    ],
     "sold_price": ["soldprice", "saleprice"],
     "sold_date": ["solddate", "datesold"],
     "target_price": ["targetprice", "target", "maxprice"],
     "location": ["location", "shelf", "storage"],
+    "acquired_from": [
+        "acquiredfrom",
+        "boughtfrom",
+        "purchasedfrom",
+        "purchasedat",
+        "purchased",
+        "source",
+        "store",
+        "seller",
+        "where",
+        "bought",
+    ],  # fmt: skip
     "tags": ["tags", "tag", "labels"],
     "notes": ["notes", "note", "comments", "comment"],
     "pricecharting_url": ["pricechartingurl", "pricecharting", "url", "link"],
@@ -53,7 +74,7 @@ HEADER_HINTS = {
 CONDITION_WORDS = {
     Condition.loose: ["loose", "cartonly", "disconly", "gameonly", "used", "cart", "disc", "l"],
     Condition.cib: ["cib", "complete", "completeinbox", "boxed", "c"],
-    Condition.new: ["new", "sealed", "nib", "newinbox", "mint", "n"],
+    Condition.new: ["new", "sealed", "nib", "newinbox", "sib", "sealedinbox", "mint", "n"],
     Condition.graded: ["graded", "wata", "vga", "cgc"],
     Condition.box_only: ["boxonly", "box"],
     Condition.manual_only: ["manualonly", "manual"],
@@ -103,7 +124,7 @@ def norm(s: str | None) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
-def suggest_mapping(headers: list[str]) -> dict[str, str]:
+def suggest_mapping(headers: list[str], rows: list[dict[str, str]] | None = None) -> dict[str, str]:
     """field -> column, best guess from header names."""
     mapping: dict[str, str] = {}
     used: set[str] = set()
@@ -124,7 +145,64 @@ def suggest_mapping(headers: list[str]) -> dict[str, str]:
                 mapping[f] = h
                 used.add(h)
                 break
+    if rows:
+        _refine_with_data(mapping, used, headers, rows)
     return mapping
+
+
+def _column_values(rows: list[dict[str, str]], column: str, limit: int = 300) -> list[str]:
+    out = []
+    for row in rows:
+        v = (row.get(column) or "").strip()
+        if v:
+            out.append(v)
+            if len(out) >= limit:
+                break
+    return out
+
+
+def _refine_with_data(
+    mapping: dict[str, str], used: set[str], headers: list[str], rows: list[dict[str, str]]
+) -> None:
+    """Use cell values where header names are ambiguous or missing."""
+    values = {h: _column_values(rows, h) for h in headers}
+    # A column that is one repeated label (e.g. "Lookup" link text) isn't real notes/tags.
+    for f in ("notes", "tags", "location", "grade"):
+        col = mapping.get(f)
+        is_link_label = col and f"{col} (link)" in headers and len(set(values[col])) <= 1
+        if col and (is_link_label or (len(values[col]) >= 5 and len(set(values[col])) == 1)):
+            del mapping[f]
+            used.discard(col)
+    # Columns of PriceCharting links
+    if "pricecharting_url" not in mapping:
+        for h in headers:
+            vals = values[h]
+            if (
+                h not in used
+                and vals
+                and sum(normalize_pricecharting_url(v) is not None for v in vals) >= 0.5 * len(vals)
+            ):
+                mapping["pricecharting_url"] = h
+                used.add(h)
+                break
+    # Recognize condition/status/category columns by their contents ("Rating" = Loose/CIB/...)
+    for f, table in (("condition", CONDITION_WORDS), ("status", STATUS_WORDS), ("category", CATEGORY_WORDS)):
+        if f in mapping:
+            continue
+        for h in headers:
+            vals = values[h]
+            if (
+                h not in used
+                and len(vals) >= 3
+                and sum(_word_lookup(table, v) is not None for v in vals) >= 0.8 * len(vals)
+            ):
+                mapping[f] = h
+                used.add(h)
+                break
+    # One tab per platform: the sheet name is the platform
+    if "platform" not in mapping and "Sheet name" in headers:
+        mapping["platform"] = "Sheet name"
+        used.add("Sheet name")
 
 
 def _word_lookup(table: dict, value: str):
@@ -186,6 +264,10 @@ def parse_date(value: str, day_first: bool = False) -> date | None:
 
 def parse_bool(value: str) -> bool | None:
     n = (value or "").strip().lower()
+    try:
+        return float(n) > 0  # numeric scores, e.g. 10 = present, 0 = missing
+    except ValueError:
+        pass
     if n in TRUE_WORDS:
         return True
     if n in FALSE_WORDS:
@@ -231,7 +313,12 @@ class PlatformMatcher:
         for alias, slug in PLATFORM_ALIASES.items():
             if slug in by_slug:
                 self.by_key.setdefault(alias, by_slug[slug])
-        self.by_pc_slug = {p.pricecharting_slug: p for p in platforms if p.pricecharting_slug}
+        # Several platforms can share one PriceCharting console (Genesis and Nomad): keep all,
+        # oldest first, so the original platform wins unless the row names another.
+        self.by_pc_slug: dict[str, list[Platform]] = {}
+        for p in sorted(platforms, key=lambda p: p.id):
+            if p.pricecharting_slug:
+                self.by_pc_slug.setdefault(p.pricecharting_slug, []).append(p)
         self.variants = {(_base_slug(p.slug), p.region): p for p in platforms}
 
     def _lookup(self, name: str) -> tuple[Platform | None, str | None]:
@@ -249,6 +336,9 @@ class PlatformMatcher:
             return platform
         return self.variants.get((_base_slug(platform.slug), region), platform)
 
+    def for_url(self, url: str | None) -> list[Platform]:
+        return self.by_pc_slug.get(console_slug_from_url(url) or "", []) if url else []
+
     def match(
         self,
         name: str | None,
@@ -257,11 +347,19 @@ class PlatformMatcher:
         default_region: str | None = None,
     ) -> Platform | None:
         """`region` (e.g. from a Region column) wins over words in the name; `default_region`
-        applies only when neither the name nor the column says."""
-        if url:
-            p = self.by_pc_slug.get(console_slug_from_url(url) or "")
-            if p:
-                return p
+        applies only when neither the name nor the column says. A link's console decides the
+        platform, preferring the named one when several share that console."""
+        linked = self.for_url(url)
+        named = self._lookup(name)[0] if name else None
+        if linked:
+            if named and any(p.id == named.id for p in linked):
+                return named
+            return linked[0]
+        return self.match_name(name, region, default_region)
+
+    def match_name(
+        self, name: str | None, region: str | None = None, default_region: str | None = None
+    ) -> Platform | None:
         if not name:
             return None
         platform, named_region = self._lookup(name)
@@ -296,9 +394,88 @@ class Options:
     default_condition: Condition = Condition.loose
     default_platform_id: int | None = None
     default_category: Category = Category.game
-    day_first: bool = False
+    day_first: bool | None = None  # None: detect from the data
     skip_duplicates: bool = True
     default_region: str = "NTSC-U"
+    # Prices in the sheet are the total for the row (all copies), not per copy.
+    prices_per_row: bool = False
+
+
+def detect_day_first(rows: list[dict[str, str]], columns: list[str]) -> bool:
+    """True if any d/m/y-looking date has a first part over 12 (and none has a second part over 12)."""
+    day_first = month_first = False
+    for row in rows:
+        for col in columns:
+            m = re.match(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-]\d{2,4}\s*$", row.get(col) or "")
+            if m:
+                a, b = int(m.group(1)), int(m.group(2))
+                day_first |= a > 12
+                month_first |= b > 12
+    return day_first and not month_first
+
+
+# (collection shelf, linked console): hardware that plays the other's games, so a link to the
+# other console is plausible, e.g. a TurboGrafx-CD disc filed with TG16, a PS1 disc with PS2.
+COMPATIBLE = {
+    ("turbografx-16", "turbografx-cd"), ("genesis", "sega-cd"), ("genesis", "sega-32x"),
+    ("ps2", "ps1"), ("ps3", "ps1"), ("ps3", "ps2"), ("ps5", "ps4"),
+    ("game-boy-color", "game-boy"), ("game-boy-advance", "game-boy"), ("game-boy-advance", "game-boy-color"),
+    ("nintendo-3ds", "nintendo-ds"), ("wii", "gamecube"), ("wii-u", "wii"), ("switch-2", "switch"),
+    ("xbox-360", "xbox"), ("xbox-one", "xbox-360"), ("xbox-series", "xbox-one"),
+}  # fmt: skip
+
+
+def _same_hardware(named: Platform, linked: Platform) -> bool:
+    a, b = _base_slug(named.slug), _base_slug(linked.slug)
+    return a == b or (a, b) in COMPATIBLE
+
+
+_STOPWORDS = {"the", "of", "and", "a", "an", "to", "in", "on", "for", "vs", "with"}
+_ROMAN = {
+    "ii": "2",
+    "iii": "3",
+    "iv": "4",
+    "v": "5",
+    "vi": "6",
+    "vii": "7",
+    "viii": "8",
+    "ix": "9",
+    "x": "10",
+}
+
+
+def _title_words(text: str) -> set[str]:
+    text = unquote(text).lower().replace("&", " and ").replace("'", "")
+    text = re.sub(r"(\d)[.,](\d)", r"\1\2", text)  # 1,000 / 1.000 / 2.0 -> 1000 / 20
+    return {_ROMAN.get(w, w) for w in re.findall(r"[a-z0-9]+", text)} - _STOPWORDS
+
+
+def _numbers_agree(a: set[str], b: set[str]) -> bool:
+    """Every number on one side appears on the other (a 2-digit year matches its 4-digit form)."""
+
+    def found(n: str, pool: set[str]) -> bool:
+        return any(m == n or (len(n) == 2 and len(m) == 4 and m.endswith(n)) for m in pool)
+
+    na, nb = {w for w in a if w.isdigit()}, {w for w in b if w.isdigit()}
+    return not na or not nb or all(found(n, nb) for n in na) or all(found(n, na) for n in nb)
+
+
+def link_matches_title(title: str, url: str) -> bool:
+    """Loose check that a PriceCharting link is for this game, to catch copy-paste mistakes in
+    spreadsheets ("Stealth" linking to Rocket Ranger, "Madden 97" to Madden 96) while allowing
+    naming differences ("Madden 98" vs madden-nfl-98, "SoulBlazer" vs soul-blazer)."""
+    slug = unquote(url.rstrip("/").rsplit("/", 1)[-1])
+    if not title or not slug:
+        return True
+    t, s = _title_words(title), _title_words(slug.replace("-", " "))
+    if not t or not s:
+        return True  # nothing to compare
+    if not _numbers_agree(t, s):
+        return False  # "Madden 97" vs madden-96
+    compact_t, compact_s = norm(unquote(title)), norm(slug)
+    if compact_t and (compact_t in compact_s or compact_s in compact_t):
+        return True
+    return len(t & s) / min(len(t), len(s)) >= 0.5
 
 
 def _cell(row: dict[str, str], mapping: dict[str, str], f: str) -> str:
@@ -308,6 +485,9 @@ def _cell(row: dict[str, str], mapping: dict[str, str], f: str) -> str:
 
 def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options) -> list[RowResult]:
     matcher = PlatformMatcher(db)
+    if opts.day_first is None:
+        date_cols = [opts.mapping[f] for f in ("purchase_date", "sold_date") if opts.mapping.get(f)]
+        opts.day_first = detect_day_first(rows, date_cols)
     default_platform = db.get(Platform, opts.default_platform_id) if opts.default_platform_id else None
     # Existing catalog, for de-duplicating products
     catalog_by_title = {
@@ -340,10 +520,10 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v = r.values
 
         title = cell("title")
-        url = cell("pricecharting_url")
-        if url and not is_pricecharting_url(url):
+        raw_url = cell("pricecharting_url")
+        url = normalize_pricecharting_url(raw_url) or "" if raw_url else ""
+        if raw_url and not url:
             r.warnings.append("PriceCharting URL ignored (not a pricecharting.com/game/ link)")
-            url = ""
         if not title and not url:
             r.errors.append("missing title")
         v["title"] = title
@@ -353,6 +533,20 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         region = parse_region(region_raw) if region_raw else None
         if region_raw and region is None:
             r.warnings.append(f"region {region_raw!r} not recognized (use NTSC-U, PAL or NTSC-J)")
+        # Distrust links that look like they belong to another game or console; the item is then
+        # linked by title search later instead of being priced as the wrong game.
+        if url and title and not link_matches_title(title, url):
+            r.warnings.append(
+                f"PriceCharting link looks like a different game ({url.rsplit('/', 1)[-1]}); ignored"
+            )
+            url = ""
+        named = (
+            matcher.match_name(cell("platform"), region, opts.default_region) if cell("platform") else None
+        )
+        linked = matcher.for_url(url)
+        if url and named and linked and not any(_same_hardware(named, p) for p in linked):
+            r.warnings.append(f"PriceCharting link is for {linked[0].name}, not {named.name}; ignored")
+            url = ""
         platform = matcher.match(cell("platform"), url or None, region, opts.default_region)
         if platform is None and cell("platform"):
             if default_platform:
@@ -391,6 +585,11 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
                 v[f] = parse_money(cell(f))
             except ValueError as e:
                 r.errors.append(f"{f.replace('_', ' ')}: {e}")
+        qty = v.get("quantity") or 1
+        if opts.prices_per_row and qty > 1:
+            for f in ("purchase_price", "sold_price"):
+                if v.get(f) is not None:
+                    v[f] = (v[f] / qty).quantize(Decimal("0.01"))
         for f in ("purchase_date", "sold_date"):
             try:
                 v[f] = parse_date(cell(f), opts.day_first)
@@ -408,6 +607,11 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v.setdefault("has_box", v["condition"] in ("cib", "new", "box_only"))
         v.setdefault("has_manual", v["condition"] in ("cib", "new", "manual_only"))
         v.setdefault("has_inserts", False)
+        # "Box" in many trackers means game + box without the manual. PriceCharting has no price for
+        # that, so value it as loose (with the box noted) rather than as an empty box.
+        if v["condition"] == "box_only" and v["has_item"]:
+            v["condition"] = Condition.loose.value
+            v["has_box"] = True
 
         upc = re.sub(r"\D", "", cell("upc"))
         v["upc"] = upc if 8 <= len(upc) <= 14 else None
@@ -416,6 +620,7 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v["region"] = None  # the platform carries the region
         for f in ("grade", "location", "notes"):
             v[f] = cell(f) or None
+        v["acquired_from"] = cell("acquired_from")[:64] or None
 
         if r.platform_id:
             r.product_id = (
@@ -424,12 +629,13 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
                 or catalog_by_title.get((norm(title), r.platform_id))
                 or None
             )
-            key = (r.product_id or (norm(title), r.platform_id), v["condition"], v["status"])
-            if (r.product_id, v["condition"], v["status"]) in owned or key in seen_in_file:
+            key = (r.product_id or url or (norm(title), r.platform_id), v["condition"], v["status"])
+            if (r.product_id, v["condition"], v["status"]) in owned:
                 r.duplicate = True
-                r.warnings.append(
-                    "already in your collection" if key not in seen_in_file else "duplicate row"
-                )
+                r.warnings.append("already in your collection")
+            elif key in seen_in_file:
+                # A repeated row in a hand-kept sheet is usually a second copy: import it, but say so.
+                r.warnings.append("appears more than once in the file")
             seen_in_file.add(key)
 
         r.ok = not r.errors
@@ -488,6 +694,7 @@ def commit(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options)
                         "sold_date",
                         "target_price",
                         "location",
+                        "acquired_from",
                         "tags",
                         "notes",
                     )
