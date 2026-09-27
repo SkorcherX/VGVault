@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>VGVault</Name>
+  <Repository>ghcr.io/skorcherx/vgvault:latest</Repository>
+  <Registry>https://github.com/SkorcherX/VGVault/pkgs/container/vgvault</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/SkorcherX/VGVault/issues</Support>
+  <Project>https://github.com/SkorcherX/VGVault</Project>
+  <Overview>Self-hosted video game collection tracker with price tracking and analytics. Multi-user, filter by console, brand, era, media type and more.</Overview>
+  <Category>MediaServer:Other Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/SkorcherX/VGVault/main/unraid/vgvault.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/SkorcherX/VGVault/main/frontend/public/favicon.svg</Icon>
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp" Description="Web interface port" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/vgvault" Mode="rw" Description="Database, images, logs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/vgvault</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/New_York" Mode="" Description="Timezone (used for scrape schedule)" Type="Variable" Display="always" Required="false" Mask="false">America/New_York</Config>
+  <Config Name="Allow registration" Target="ALLOW_REGISTRATION" Default="false" Mode="" Description="Let anyone create an account from the login page" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Secure cookies" Target="COOKIE_SECURE" Default="false" Mode="" Description="Set true when served over HTTPS via a reverse proxy" Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Secret key" Target="SECRET_KEY" Default="" Mode="" Description="Optional; auto-generated into /config if blank" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+</Container>

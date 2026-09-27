@@ -1,0 +1,8 @@
+fastapi==0.118.*
+uvicorn[standard]==0.37.*
+sqlalchemy==2.0.*
+alembic==1.16.*
+pydantic-settings==2.11.*
+argon2-cffi==25.1.*
+pyjwt==2.10.*
+pyyaml==6.0.*

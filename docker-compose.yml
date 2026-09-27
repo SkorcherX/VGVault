@@ -1,0 +1,20 @@
+services:
+  vgvault:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/skorcherx/vgvault:latest
+    container_name: vgvault
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config
+    environment:
+      - TZ=America/Chicago
+      - PUID=1000
+      - PGID=1000
+      # - SECRET_KEY=change-me          # auto-generated into /config if unset
+      # - ALLOW_REGISTRATION=false
+      # - COOKIE_SECURE=true            # when served over HTTPS
+      # - DATABASE_URL=postgresql+psycopg://user:pass@host/vgvault
+    restart: unless-stopped
