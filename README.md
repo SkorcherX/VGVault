@@ -26,6 +26,13 @@ Admins can schedule SQLite backups (default daily 02:30, keep 14) under *Backups
 
 *Add item → Scan* uses the device camera to read a UPC. Browsers only allow camera access over HTTPS (or on localhost), so put VGVault behind your reverse proxy with TLS to scan from a phone. Typing the UPC into the search box works everywhere.
 
+## Regions and currency
+
+- All prices are in **USD**, as PriceCharting reports them, including for PAL and Japanese games.
+- **PAL and Japanese releases are separate platforms** (e.g. *Nintendo 64 (PAL)*, *Sega Saturn (JP)*), each mapped to its own PriceCharting console, because their prices differ a lot from the North American versions. Famicom, Super Famicom and PC Engine are the Japanese counterparts of NES, SNES and TurboGrafx-16.
+- Filter and break down the collection and dashboard by region (NTSC-U / PAL / NTSC-J).
+- Imports read region from a Region column or from words in the platform name ("N64 PAL", "Japanese Saturn"); European and Japanese collectors can set a default region for rows that don't say.
+
 ## Price tracking notes
 
 - Only products that are in someone's collection or wishlist are fetched, one request at a time with a random 4–10s delay (configurable in *Price tracking*).

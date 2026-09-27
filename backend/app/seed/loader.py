@@ -36,7 +36,8 @@ def seed_platforms(db: Session) -> int:
     existing = set(db.scalars(select(Platform.slug)))
     added = 0
     for row in data["platforms"]:
-        values = dict(zip(FIELDS, row, strict=True))
+        values = dict(zip(FIELDS, row[: len(FIELDS)], strict=True))
+        values["region"] = row[len(FIELDS)] if len(row) > len(FIELDS) else "NTSC-U"
         if values["slug"] in existing:
             continue
         values["era"] = ERAS.get(values["generation"]) or (

@@ -83,6 +83,7 @@ export default function ImportPage() {
     default_platform_id: '' as number | '',
     day_first: false,
     skip_duplicates: true,
+    default_region: 'NTSC-U' as 'NTSC-U' | 'PAL' | 'NTSC-J',
   })
   const [problemsOnly, setProblemsOnly] = useState(false)
 
@@ -183,7 +184,10 @@ export default function ImportPage() {
       {headers.length > 0 && (
         <section className="card">
           <h2>2. Match columns</h2>
-          <p className="muted small">Columns were matched by name where possible. Fields left blank use the defaults.</p>
+          <p className="muted small">
+            Columns were matched by name where possible. Fields left blank use the defaults. PAL and Japanese releases
+            are separate platforms: a Region column, or words like "PAL" or "Japanese" in the platform name, pick them.
+          </p>
           <div className="map-grid">
             {Object.entries(FIELD_LABELS).map(([field, label]) => (
               <label key={field} className="field">
@@ -236,6 +240,17 @@ export default function ImportPage() {
                     {l}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Region when not stated</span>
+              <select
+                value={defaults.default_region}
+                onChange={(e) => setDefault('default_region', e.target.value as typeof defaults.default_region)}
+              >
+                <option value="NTSC-U">NTSC-U (North America)</option>
+                <option value="PAL">PAL (Europe / Australia)</option>
+                <option value="NTSC-J">NTSC-J (Japan)</option>
               </select>
             </label>
             <label className="field">

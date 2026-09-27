@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -19,6 +21,7 @@ class ImportBody(BaseModel):
     default_category: Category = Category.game
     day_first: bool = False
     skip_duplicates: bool = True
+    default_region: Literal["NTSC-U", "PAL", "NTSC-J"] = "NTSC-U"
 
     def options(self) -> importer.Options:
         unknown = set(self.mapping) - set(importer.FIELDS)
@@ -32,6 +35,7 @@ class ImportBody(BaseModel):
             default_category=self.default_category,
             day_first=self.day_first,
             skip_duplicates=self.skip_duplicates,
+            default_region=self.default_region,
         )
 
     def clean_rows(self) -> list[dict[str, str]]:

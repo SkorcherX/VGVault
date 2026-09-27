@@ -24,7 +24,11 @@ export default function PlatformsPage({ isAdmin }: { isAdmin: boolean }) {
   const rows = useMemo(() => {
     const f = filter.toLowerCase()
     return (platforms.data ?? []).filter(
-      (p) => !f || p.name.toLowerCase().includes(f) || p.brand.toLowerCase().includes(f),
+      (p) =>
+        !f ||
+        p.name.toLowerCase().includes(f) ||
+        p.brand.toLowerCase().includes(f) ||
+        p.region.toLowerCase().includes(f),
     )
   }, [platforms.data, filter])
 
@@ -40,6 +44,7 @@ export default function PlatformsPage({ isAdmin }: { isAdmin: boolean }) {
           <tr>
             <th>Name</th>
             <th>Brand</th>
+            <th>Region</th>
             <th>Era</th>
             <th>Media</th>
             <th>Handheld</th>
@@ -52,6 +57,7 @@ export default function PlatformsPage({ isAdmin }: { isAdmin: boolean }) {
             <tr key={p.id} className={isAdmin ? 'clickable' : ''} onClick={() => isAdmin && setEditing(p)}>
               <td>{p.name}</td>
               <td>{p.brand}</td>
+              <td>{p.region}</td>
               <td>{p.era ?? '—'}</td>
               <td>{MEDIA_TYPES[p.media_type]}</td>
               <td>{p.handheld ? 'Yes' : ''}</td>

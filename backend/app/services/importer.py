@@ -193,7 +193,33 @@ def parse_bool(value: str) -> bool | None:
     raise ValueError(f"not yes/no: {value!r}")
 
 
+REGION_WORDS = {
+    "pal": "PAL", "eu": "PAL", "eur": "PAL", "europe": "PAL", "european": "PAL", "uk": "PAL",
+    "au": "PAL", "aus": "PAL", "australia": "PAL",
+    "jp": "NTSC-J", "jpn": "NTSC-J", "jap": "NTSC-J", "japan": "NTSC-J", "japanese": "NTSC-J",
+    "ntscj": "NTSC-J",
+    "us": "NTSC-U", "usa": "NTSC-U", "na": "NTSC-U", "ntsc": "NTSC-U", "ntscu": "NTSC-U",
+    "northamerica": "NTSC-U",
+}  # fmt: skip
+# Japanese counterparts that are their own platforms rather than "<base>-jp".
+JP_EQUIVALENTS = {"nes": "famicom", "snes": "super-famicom", "turbografx-16": "pc-engine"}
+
+
+def parse_region(value: str | None) -> str | None:
+    n = norm(value)
+    return REGION_WORDS.get(n) or {"pal": "PAL", "ntscj": "NTSC-J", "ntscu": "NTSC-U"}.get(n)
+
+
+def _base_slug(slug: str) -> str:
+    for suffix in ("-pal", "-jp"):
+        if slug.endswith(suffix):
+            return slug[: -len(suffix)]
+    return {v: k for k, v in JP_EQUIVALENTS.items()}.get(slug, slug)
+
+
 class PlatformMatcher:
+    """Match free-text platform names, including region words ("N64 PAL", "Japanese Saturn")."""
+
     def __init__(self, db: Session):
         self.by_key: dict[str, Platform] = {}
         platforms = list(db.scalars(select(Platform)))
@@ -206,15 +232,48 @@ class PlatformMatcher:
             if slug in by_slug:
                 self.by_key.setdefault(alias, by_slug[slug])
         self.by_pc_slug = {p.pricecharting_slug: p for p in platforms if p.pricecharting_slug}
+        self.variants = {(_base_slug(p.slug), p.region): p for p in platforms}
 
-    def match(self, name: str | None, url: str | None = None) -> Platform | None:
-        if name:
-            p = self.by_key.get(norm(name))
+    def _lookup(self, name: str) -> tuple[Platform | None, str | None]:
+        p = self.by_key.get(norm(name))
+        if p:
+            return p, None
+        # Strip region words ("PAL", "(JP)", "Japanese") and try again.
+        words = re.findall(r"[a-z0-9]+", name.lower())
+        region = next((REGION_WORDS[w] for w in words if w in REGION_WORDS), None)
+        rest = "".join(w for w in words if w not in REGION_WORDS)
+        return (self.by_key.get(rest) if rest else None), region
+
+    def in_region(self, platform: Platform, region: str | None) -> Platform:
+        if not region or platform.region == region:
+            return platform
+        return self.variants.get((_base_slug(platform.slug), region), platform)
+
+    def match(
+        self,
+        name: str | None,
+        url: str | None = None,
+        region: str | None = None,
+        default_region: str | None = None,
+    ) -> Platform | None:
+        """`region` (e.g. from a Region column) wins over words in the name; `default_region`
+        applies only when neither the name nor the column says."""
+        if url:
+            p = self.by_pc_slug.get(console_slug_from_url(url) or "")
             if p:
                 return p
-        if url:
-            return self.by_pc_slug.get(console_slug_from_url(url) or "")
-        return None
+        if not name:
+            return None
+        platform, named_region = self._lookup(name)
+        if platform is None:
+            return None
+        explicit = region or named_region
+        if explicit:
+            return self.in_region(platform, explicit)
+        # A bare name that is itself regional ("Super Famicom") keeps its region.
+        if platform.region != "NTSC-U" or not default_region:
+            return platform
+        return self.in_region(platform, default_region)
 
 
 @dataclass
@@ -239,6 +298,7 @@ class Options:
     default_category: Category = Category.game
     day_first: bool = False
     skip_duplicates: bool = True
+    default_region: str = "NTSC-U"
 
 
 def _cell(row: dict[str, str], mapping: dict[str, str], f: str) -> str:
@@ -289,7 +349,11 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v["title"] = title
         v["pricecharting_url"] = url or None
 
-        platform = matcher.match(cell("platform"), url or None)
+        region_raw = cell("region")
+        region = parse_region(region_raw) if region_raw else None
+        if region_raw and region is None:
+            r.warnings.append(f"region {region_raw!r} not recognized (use NTSC-U, PAL or NTSC-J)")
+        platform = matcher.match(cell("platform"), url or None, region, opts.default_region)
         if platform is None and cell("platform"):
             if default_platform:
                 r.warnings.append(f"unknown platform {cell('platform')!r}, using {default_platform.name}")
@@ -298,6 +362,8 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         platform = platform or default_platform
         if platform is None and "unknown platform" not in " ".join(r.errors):
             r.errors.append("missing platform")
+        elif platform and opts.default_platform_id and not cell("platform"):
+            platform = matcher.in_region(platform, region)
         if platform:
             r.platform_id, r.platform_name = platform.id, platform.name
 
@@ -347,7 +413,8 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v["upc"] = upc if 8 <= len(upc) <= 14 else None
         tags = cell("tags")
         v["tags"] = [t.strip() for t in re.split(r"[;,|]", tags) if t.strip()] if tags else []
-        for f in ("region", "grade", "location", "notes"):
+        v["region"] = None  # the platform carries the region
+        for f in ("grade", "location", "notes"):
             v[f] = cell(f) or None
 
         if r.platform_id:

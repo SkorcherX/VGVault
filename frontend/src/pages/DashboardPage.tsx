@@ -28,17 +28,27 @@ interface DashFilters {
   era: string[]
   media_type: MediaType[]
   condition: Condition[]
+  region: string[]
 }
 
-const EMPTY: DashFilters = { category: [], brand: [], platform_id: [], era: [], media_type: [], condition: [] }
+const EMPTY: DashFilters = {
+  category: [],
+  brand: [],
+  platform_id: [],
+  era: [],
+  media_type: [],
+  condition: [],
+  region: [],
+}
 const STORE_KEY = 'vgvault.dashboard'
 
 type Range = '3m' | '1y' | '5y' | 'all'
-type GroupBy = 'brand' | 'platform' | 'era' | 'media_type' | 'category' | 'condition' | 'genre'
+type GroupBy = 'brand' | 'platform' | 'region' | 'era' | 'media_type' | 'category' | 'condition' | 'genre'
 
 const GROUP_LABELS: Record<GroupBy, string> = {
   brand: 'Brand',
   platform: 'Platform',
+  region: 'Region',
   era: 'Era',
   media_type: 'Media',
   category: 'Category',
@@ -129,6 +139,8 @@ export default function DashboardPage() {
         return update({ brand: [key] })
       case 'era':
         return update({ era: [key] })
+      case 'region':
+        return update({ region: [key] })
       case 'media_type':
         return update({ media_type: [key as MediaType] })
       case 'category':
@@ -181,6 +193,12 @@ export default function DashboardPage() {
           options={(f?.platforms ?? []).map((p) => ({ value: p.id, label: p.name }))}
           value={filters.platform_id}
           onChange={(v) => update({ platform_id: v })}
+        />
+        <MultiSelect
+          label="Region"
+          options={(f?.regions ?? []).map((r) => ({ value: r, label: r }))}
+          value={filters.region}
+          onChange={(v) => update({ region: v })}
         />
         <MultiSelect
           label="Era"

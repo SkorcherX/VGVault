@@ -129,6 +129,9 @@ docker-compose.yml  (local dev)
 
 ## Open questions
 
-- Currency: USD only, or convert? (PriceCharting is USD.)
-- Region handling: PAL/JP prices live on separate PriceCharting pages. Link per-region products?
 - Should users be able to see each other's collections (opt-in sharing)?
+
+## Resolved
+
+- Currency: USD only (PriceCharting's currency).
+- Regions: PAL and Japanese releases are separate platforms, each mapped to its PriceCharting console.

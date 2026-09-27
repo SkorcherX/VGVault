@@ -19,7 +19,7 @@ from app.models.enums import ItemStatus
 from app.pricing.base import CONDITION_FIELDS
 from app.services.filters import ItemFilters, items_query
 
-GROUPINGS = ("brand", "platform", "era", "media_type", "category", "condition", "genre", "status")
+GROUPINGS = ("brand", "platform", "era", "media_type", "category", "condition", "genre", "status", "region")
 
 
 @dataclass
@@ -193,6 +193,7 @@ def _group_key(h: Holding, by: str) -> str:
         "condition": h.item.condition,
         "genre": product.genre,
         "status": h.item.status,
+        "region": product.region or platform.region,
     }[by] or "Unknown"
 
 

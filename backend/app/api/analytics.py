@@ -36,7 +36,7 @@ def breakdown(
     user: CurrentUser,
     filters: Filters,
     by: Literal[
-        "brand", "platform", "era", "media_type", "category", "condition", "genre", "status"
+        "brand", "platform", "era", "media_type", "category", "condition", "genre", "status", "region"
     ] = "brand",
 ):
     return analytics.breakdown(analytics.load_holdings(db, user.id, filters), by)
