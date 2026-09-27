@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import String
+from sqlalchemy import JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -19,6 +19,7 @@ class User(Base):
     # Bumped on password reset / disable to invalidate existing sessions.
     token_version: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    notify: Mapped[dict] = mapped_column(JSON, default=dict)
 
     @property
     def is_admin(self) -> bool:

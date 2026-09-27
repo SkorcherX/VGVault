@@ -291,6 +291,12 @@ def _do_run(db: Session, trigger: str, force: bool) -> int:
     run.finished_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     log.info("Price update %d finished: %s", run.id, run.status)
+    if run.succeeded:
+        from app.services.notifications import notify_all
+
+        sent = notify_all(db)
+        if sent:
+            log.info("Sent %d price alerts", sent)
     return run.id
 
 

@@ -7,6 +7,7 @@ from app.core.security import COOKIE_NAME, create_access_token, hash_password, v
 from app.models import User
 from app.models.enums import Role
 from app.schemas.auth import ChangePassword, Credentials, SetupRequest, SetupStatus, UserOut
+from app.services import notifications
 
 router = APIRouter(tags=["auth"])
 
@@ -91,3 +92,30 @@ def change_password(body: ChangePassword, user: CurrentUser, db: DB, response: R
     user.token_version += 1
     db.commit()
     _set_session(response, user)
+
+
+@router.get("/auth/notifications", response_model=notifications.NotificationSettings)
+def get_notifications(user: CurrentUser):
+    return notifications.get_settings(user)
+
+
+@router.put("/auth/notifications", response_model=notifications.NotificationSettings)
+def update_notifications(body: notifications.NotificationSettings, user: CurrentUser, db: DB):
+    body.urls = [u.strip() for u in body.urls if u.strip()]
+    user.notify = body.model_dump(mode="json")
+    db.commit()
+    return body
+
+
+@router.post("/auth/notifications/test")
+def test_notification(user: CurrentUser):
+    urls = notifications.get_settings(user).urls
+    if not urls:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add at least one notification URL first")
+    try:
+        ok = notifications.send(urls, "VGVault test", f"Notifications are working for {user.username}.")
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from None
+    if not ok:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Sending failed; check the URLs")
+    return {"sent": True}

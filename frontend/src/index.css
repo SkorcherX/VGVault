@@ -898,3 +898,10 @@ main {
     grid-template-columns: 1fr;
   }
 }
+code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--surface-2);
+  padding: 0 0.25rem;
+  border-radius: 4px;
+}

@@ -63,3 +63,17 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[object] = mapped_column(JSON)
+
+
+class NotificationLog(Base):
+    """Sent alerts, so the same price change is never announced twice."""
+
+    __tablename__ = "notification_log"
+    __table_args__ = (UniqueConstraint("item_id", "kind", "captured_on", name="uq_notification_once"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("collection_items.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(16))  # move | wishlist
+    captured_on: Mapped[date]
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
