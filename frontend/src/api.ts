@@ -207,7 +207,7 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | boolean | (string | number)[] | null | undefined>
 
-function toQuery(params?: Params): string {
+export function toQuery(params?: Params): string {
   if (!params) return ''
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {

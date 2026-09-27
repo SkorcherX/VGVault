@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { api, type User } from './api'
 import AccountPage from './pages/AccountPage'
+import BackupsPage from './pages/BackupsPage'
 import CollectionPage from './pages/CollectionPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
@@ -50,6 +51,7 @@ function Shell({ user }: { user: User }) {
             <>
               <NavLink to="/admin/prices">Price tracking</NavLink>
               <NavLink to="/admin/users">Users</NavLink>
+              <NavLink to="/admin/backups">Backups</NavLink>
             </>
           )}
         </nav>
@@ -70,6 +72,7 @@ function Shell({ user }: { user: User }) {
           <Route path="/account" element={<AccountPage user={user} />} />
           {user.role === 'admin' && <Route path="/admin/users" element={<UsersPage me={user} />} />}
           {user.role === 'admin' && <Route path="/admin/prices" element={<ScraperPage />} />}
+          {user.role === 'admin' && <Route path="/admin/backups" element={<BackupsPage />} />}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>

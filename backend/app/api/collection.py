@@ -1,6 +1,10 @@
+import csv
+import io
+import json
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUser
@@ -78,6 +82,67 @@ def facets(db: DB, user: CurrentUser):
         tags=sorted({t for _, _, tags, _ in rows for t in (tags or [])}),
         locations=sorted({loc for *_, loc in rows if loc}),
     )
+
+
+EXPORT_FIELDS = [
+    "title", "platform", "brand", "category", "region", "status", "condition", "quantity",
+    "has_item", "has_box", "has_manual", "has_inserts", "grade",
+    "purchase_price", "purchase_date", "sold_price", "sold_date", "target_price",
+    "location", "tags", "notes", "market_price", "value", "priced_on",
+    "pricecharting_id", "pricecharting_url", "upc",
+]  # fmt: skip
+
+
+def _export_row(item) -> dict:
+    p = item.product
+    return {
+        "title": p.title,
+        "platform": p.platform.name,
+        "brand": p.platform.brand,
+        "category": p.category,
+        "region": p.region or p.platform.region,
+        "status": item.status,
+        "condition": item.condition,
+        "quantity": item.quantity,
+        "has_item": item.has_item,
+        "has_box": item.has_box,
+        "has_manual": item.has_manual,
+        "has_inserts": item.has_inserts,
+        "grade": item.grade,
+        "purchase_price": item.purchase_price,
+        "purchase_date": item.purchase_date,
+        "sold_price": item.sold_price,
+        "sold_date": item.sold_date,
+        "target_price": item.target_price,
+        "location": item.location,
+        "tags": item.tags or [],
+        "notes": item.notes,
+        "market_price": item.market_price,
+        "value": item.value,
+        "priced_on": item.priced_on,
+        "pricecharting_id": p.pricecharting_id,
+        "pricecharting_url": p.pricecharting_url,
+        "upc": p.upc,
+    }
+
+
+@router.get("/export")
+def export(db: DB, user: CurrentUser, filters: Filters, format: Literal["csv", "json"] = "csv"):
+    stmt = items_query(user.id, filters).order_by(Platform.name, Product.title, CollectionItem.id)
+    rows = [_export_row(i) for i in attach_prices(db, db.scalars(stmt).unique())]
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    filename = f"vgvault-{user.username}-{stamp}.{format}"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if format == "json":
+        body = json.dumps(rows, default=str, indent=2)
+        return Response(body, media_type="application/json", headers=headers)
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=EXPORT_FIELDS)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({**row, "tags": "; ".join(row["tags"])})
+    # BOM so Excel opens UTF-8 correctly
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8", headers=headers)
 
 
 @router.get("/summary", response_model=Summary)

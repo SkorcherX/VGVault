@@ -1,4 +1,4 @@
-"""In-process APScheduler running the price update on the admin-configured cron."""
+"""In-process APScheduler running price updates and backups on admin-configured crons."""
 
 import logging
 import os
@@ -14,6 +14,7 @@ from app.services.settings import ScraperSettings, get_scraper_settings
 
 log = logging.getLogger(__name__)
 JOB_ID = "price_update"
+BACKUP_JOB_ID = "backup"
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -47,8 +48,11 @@ def start() -> None:
         timezone=_timezone(), job_defaults={"coalesce": True, "max_instances": 1}
     )
     _scheduler.start()
+    from app.services import backups
+
     with SessionLocal() as db:
         apply(get_scraper_settings(db))
+        apply_backup(backups.get_backup_settings(db))
 
 
 def shutdown() -> None:
@@ -75,6 +79,22 @@ def apply(settings: ScraperSettings) -> None:
         log.info("Price updates scheduled: %s (%s)", settings.cron, _timezone())
 
 
+def apply_backup(settings) -> None:
+    from app.services import backups
+
+    if _scheduler is None:
+        return
+    if _scheduler.get_job(BACKUP_JOB_ID):
+        _scheduler.remove_job(BACKUP_JOB_ID)
+    if settings.enabled and backups.supported():
+        _scheduler.add_job(
+            backups.scheduled_backup,
+            cron_trigger(settings.cron, _timezone()),
+            id=BACKUP_JOB_ID,
+            misfire_grace_time=3600,
+        )
+
+
 def run_now(force: bool = False) -> None:
     """Kick off a manual run in the scheduler's thread pool."""
     if _scheduler is None:
@@ -82,6 +102,6 @@ def run_now(force: bool = False) -> None:
     _scheduler.add_job(run_price_update, kwargs={"trigger": "manual", "force": force})
 
 
-def next_run_time() -> datetime | None:
-    job = _scheduler.get_job(JOB_ID) if _scheduler else None
+def next_run_time(job_id: str = JOB_ID) -> datetime | None:
+    job = _scheduler.get_job(job_id) if _scheduler else None
     return job.next_run_time if job else None

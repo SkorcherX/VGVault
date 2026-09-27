@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect, useState } from 'react'
 import {
   api,
+  toQuery,
   CATEGORIES,
   CONDITIONS,
   MEDIA_TYPES,
@@ -231,6 +232,21 @@ export default function CollectionPage() {
             </span>
           )}
           <div className="spacer" />
+          <details className="dropdown">
+            <summary>Export ▾</summary>
+            <div className="menu">
+              <p className="muted small" style={{ margin: '0 0 0.4rem' }}>
+                Items matching the current filters
+              </p>
+              <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'csv' })}`} download>
+                CSV (spreadsheet)
+              </a>
+              <br />
+              <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'json' })}`} download>
+                JSON
+              </a>
+            </div>
+          </details>
           <button onClick={() => setEditing('new')}>+ Add item</button>
         </div>
 
