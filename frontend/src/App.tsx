@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { api, type User } from './api'
+import Logo from './Logo'
 import AccountPage from './pages/AccountPage'
 import BackupsPage from './pages/BackupsPage'
 import CollectionPage from './pages/CollectionPage'
@@ -44,7 +45,12 @@ function Shell({ user }: { user: User }) {
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand">🎮 VGVault</div>
+        <div className="brand">
+          <Logo />
+          <span>
+            <span className="vg">VG</span>Vault
+          </span>
+        </div>
         <nav>
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>

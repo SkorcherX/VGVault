@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { api, type User } from '../api'
 import { ErrorText, Field } from '../components'
+import Logo from '../Logo'
 
 export default function LoginPage({ allowRegistration }: { allowRegistration: boolean }) {
   const qc = useQueryClient()
@@ -22,7 +23,12 @@ export default function LoginPage({ allowRegistration }: { allowRegistration: bo
   return (
     <div className="center">
       <form className="card auth" onSubmit={onSubmit}>
-        <h1>🎮 VGVault</h1>
+        <h1>
+          <Logo />
+          <span>
+            <span className="vg">VG</span>Vault
+          </span>
+        </h1>
         <Field label="Username">
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus required />
         </Field>
