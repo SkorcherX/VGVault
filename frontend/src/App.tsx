@@ -5,6 +5,7 @@ import AccountPage from './pages/AccountPage'
 import BackupsPage from './pages/BackupsPage'
 import CollectionPage from './pages/CollectionPage'
 import DashboardPage from './pages/DashboardPage'
+import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import PlatformsPage from './pages/PlatformsPage'
 import ScraperPage from './pages/ScraperPage'
@@ -68,6 +69,7 @@ function Shell({ user }: { user: User }) {
         <Routes>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/collection" element={<CollectionPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/platforms" element={<PlatformsPage isAdmin={user.role === 'admin'} />} />
           <Route path="/account" element={<AccountPage user={user} />} />
           {user.role === 'admin' && <Route path="/admin/users" element={<UsersPage me={user} />} />}

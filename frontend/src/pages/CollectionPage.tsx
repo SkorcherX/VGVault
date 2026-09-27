@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   api,
   toQuery,
@@ -232,6 +233,9 @@ export default function CollectionPage() {
             </span>
           )}
           <div className="spacer" />
+          <Link to="/import" className="link">
+            Import
+          </Link>
           <details className="dropdown">
             <summary>Export ▾</summary>
             <div className="menu">
