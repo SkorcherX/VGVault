@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <title>VGVault</title>
-  <!-- Cartridge-gray tile with a molded seam -->
+  <!-- Cartridge-gray tile with a slate border -->
   <rect x="2" y="2" width="60" height="60" rx="14" fill="#212328"/>
-  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="13.25" fill="none" stroke="#32353E" stroke-width="1.5"/>
+  <rect x="3" y="3" width="58" height="58" rx="13" fill="none" stroke="#8F94A2" stroke-width="2.5"/>
   <!-- SNES face buttons: X (top) and Y (left) concave purple, A (right) and B (bottom) convex lilac -->
   <circle cx="32" cy="17" r="8.5" fill="#4F43AE"/>
   <circle cx="17" cy="32" r="8.5" fill="#4F43AE"/>
