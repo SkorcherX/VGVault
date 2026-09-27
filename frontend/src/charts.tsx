@@ -22,7 +22,7 @@ export function shortMoney(v: number) {
   return `$${Math.round(v)}`
 }
 
-function niceTicks(min: number, max: number, count = 4): number[] {
+export function niceTicks(min: number, max: number, count = 4): number[] {
   if (max <= min) return [min]
   const raw = (max - min) / count
   const mag = 10 ** Math.floor(Math.log10(raw))

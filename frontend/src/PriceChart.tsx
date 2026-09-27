@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CONDITIONS, type Condition, type Snapshot } from './api'
+import { niceTicks, shortMoney } from './charts'
 import { money } from './components'
 
 const RANGES = { '1Y': 365, '5Y': 365 * 5, All: Infinity } as const
@@ -39,14 +40,17 @@ export default function PriceChart({
 
   const paid = purchasePrice ? Number(purchasePrice) : null
   const values = points.map((p) => p.v).concat(paid ? [paid] : [])
-  const minV = Math.min(...values) * 0.95
-  const maxV = Math.max(...values) * 1.05 || 1
+  // Round the axis to whole steps ($5, $10, $25, $50, ...) that enclose the data.
+  const ticks = niceTicks(Math.min(...values), Math.max(...values), 3)
+  const minV = ticks[0]
+  const maxV = ticks[ticks.length - 1] || 1
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1
+  const label = (v: number) => (step < 1 ? `$${v.toFixed(2)}` : shortMoney(v))
   const t0 = points[0]?.t ?? 0
   const t1 = points[points.length - 1]?.t ?? 1
   const x = (t: number) => PAD.l + ((t - t0) / (t1 - t0 || 1)) * (W - PAD.l - PAD.r)
   const y = (v: number) => PAD.t + (1 - (v - minV) / (maxV - minV || 1)) * (H - PAD.t - PAD.b)
   const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('')
-  const ticks = [minV, (minV + maxV) / 2, maxV]
   const hp = hover !== null ? points[hover] : null
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -93,7 +97,7 @@ export default function PriceChart({
             <g key={v}>
               <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} className="grid" />
               <text x={PAD.l - 6} y={y(v) + 4} textAnchor="end" className="axis">
-                {money(v)}
+                {label(v)}
               </text>
             </g>
           ))}
