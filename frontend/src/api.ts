@@ -248,3 +248,67 @@ export const api = {
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   del: (path: string) => request<void>('DELETE', path),
 }
+
+// --- Analytics ---------------------------------------------------------------
+
+export interface Change {
+  change: number
+  pct: number | null
+}
+
+export interface RankedItem {
+  item_id: number
+  product_id: number
+  title: string
+  platform: string
+  condition: Condition
+  has_image: boolean
+  quantity: number
+  price: number
+}
+
+export interface TopItem extends RankedItem {
+  value: number
+  cost: number | null
+}
+
+export interface Mover extends RankedItem {
+  then: number
+  change: number
+  pct: number | null
+  value_change: number
+}
+
+export interface Overview {
+  total_value: number
+  cost_basis: number
+  gain: number
+  gain_pct: number | null
+  items: number
+  quantity: number
+  priced: number
+  unpriced: number
+  changes: Record<'7d' | '30d' | '1y', Change>
+  top_items: TopItem[]
+}
+
+export interface TimePoint {
+  date: string
+  value: number
+  cost: number
+  priced: number
+}
+
+export interface Group {
+  key: string
+  value: number
+  cost: number
+  items: number
+  quantity: number
+}
+
+export interface Movers {
+  since: string
+  gainers: Mover[]
+  losers: Mover[]
+}

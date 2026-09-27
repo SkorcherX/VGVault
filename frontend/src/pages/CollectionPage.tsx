@@ -115,6 +115,7 @@ export default function CollectionPage() {
     qc.invalidateQueries({ queryKey: ['collection'] })
     qc.invalidateQueries({ queryKey: ['facets'] })
     qc.invalidateQueries({ queryKey: ['summary'] })
+    qc.invalidateQueries({ queryKey: ['analytics'] })
   }
   const bulk = useMutation({
     mutationFn: (changes: Record<string, unknown>) =>

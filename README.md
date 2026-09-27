@@ -4,10 +4,11 @@ Self-hosted video game collection tracker with price tracking and analytics. Mul
 
 See [docs/PLAN.md](docs/PLAN.md) for the full design and roadmap.
 
-**Status:** Phase 2 complete.
+**Status:** Phase 3 complete.
 - Phase 1: accounts & roles, platform catalog, collection with filters.
 - Phase 2: PriceCharting search/import/link, scheduled polite price updates, monthly history backfill, item values, admin price-tracking page.
-- Next: phase 3 analytics dashboard.
+- Phase 3: analytics dashboard — value/cost KPIs, value over time, value by brand/platform/era/media/category/condition/genre (click to drill down), most valuable items, biggest movers over 7d/30d/90d/1y.
+- Next: phase 4 polish (notifications, backups/export, barcode lookup).
 
 ## Price tracking notes
 

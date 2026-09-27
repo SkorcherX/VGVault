@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { api, type User } from './api'
 import AccountPage from './pages/AccountPage'
 import CollectionPage from './pages/CollectionPage'
+import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import PlatformsPage from './pages/PlatformsPage'
 import ScraperPage from './pages/ScraperPage'
@@ -42,6 +43,7 @@ function Shell({ user }: { user: User }) {
       <header className="topbar">
         <div className="brand">🎮 VGVault</div>
         <nav>
+          <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>
           <NavLink to="/platforms">Platforms</NavLink>
           {user.role === 'admin' && (
@@ -62,12 +64,13 @@ function Shell({ user }: { user: User }) {
       </header>
       <main>
         <Routes>
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/collection" element={<CollectionPage />} />
           <Route path="/platforms" element={<PlatformsPage isAdmin={user.role === 'admin'} />} />
           <Route path="/account" element={<AccountPage user={user} />} />
           {user.role === 'admin' && <Route path="/admin/users" element={<UsersPage me={user} />} />}
           {user.role === 'admin' && <Route path="/admin/prices" element={<ScraperPage />} />}
-          <Route path="*" element={<Navigate to="/collection" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
     </div>

@@ -1,13 +1,11 @@
-import json
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import String, cast, func, or_, select
-from sqlalchemy.orm import contains_eager
+from sqlalchemy import func, select
 
 from app.api.deps import DB, CurrentUser
 from app.models import CollectionItem, Platform, Product
-from app.models.enums import Category, Condition, ItemStatus, MediaType
+from app.models.enums import ItemStatus
 from app.schemas.collection import (
     BulkUpdate,
     Facets,
@@ -17,6 +15,7 @@ from app.schemas.collection import (
     ItemUpdate,
     Summary,
 )
+from app.services.filters import Filters, items_query
 from app.services.valuation import attach_prices
 
 router = APIRouter(prefix="/collection", tags=["collection"])
@@ -48,67 +47,17 @@ def _check_product(db: DB, product_id: int | None) -> None:
 def list_items(
     db: DB,
     user: CurrentUser,
-    q: str | None = None,
-    status_: list[ItemStatus] = Query([], alias="status"),
-    category: list[Category] = Query([]),
-    platform_id: list[int] = Query([]),
-    brand: list[str] = Query([]),
-    era: list[str] = Query([]),
-    media_type: list[MediaType] = Query([]),
-    condition: list[Condition] = Query([]),
-    region: list[str] = Query([]),
-    handheld: bool | None = None,
-    tag: str | None = None,
-    location: str | None = None,
+    filters: Filters,
     sort: str = "title",
     order: Literal["asc", "desc"] = "asc",
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    stmt = (
-        select(CollectionItem)
-        .join(CollectionItem.product)
-        .join(Product.platform)
-        .where(CollectionItem.user_id == user.id)
-    )
-    for values, column in [
-        (status_, CollectionItem.status),
-        (category, Product.category),
-        (platform_id, Product.platform_id),
-        (brand, Platform.brand),
-        (era, Platform.era),
-        (media_type, Platform.media_type),
-        (condition, CollectionItem.condition),
-    ]:
-        if values:
-            stmt = stmt.where(column.in_(values))
-    if region:
-        stmt = stmt.where(
-            or_(
-                Product.region.in_(region),
-                Product.region.is_(None) & Platform.region.in_(region),
-            )
-        )
-    if handheld is not None:
-        stmt = stmt.where(Platform.handheld == handheld)
-    if q:
-        like = f"%{q}%"
-        stmt = stmt.where(or_(Product.title.ilike(like), CollectionItem.notes.ilike(like)))
-    if tag:
-        # Tags are a JSON list; match the serialized element in its text form.
-        stmt = stmt.where(cast(CollectionItem.tags, String).like(f"%{json.dumps(tag)}%"))
-    if location:
-        stmt = stmt.where(CollectionItem.location == location)
-
+    stmt = items_query(user.id, filters)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     column = SORTS.get(sort, Product.title)
     ordered = column.desc().nulls_last() if order == "desc" else column.asc().nulls_last()
-    stmt = (
-        stmt.options(contains_eager(CollectionItem.product).contains_eager(Product.platform))
-        .order_by(ordered, CollectionItem.id)
-        .offset(offset)
-        .limit(limit)
-    )
+    stmt = stmt.order_by(ordered, CollectionItem.id).offset(offset).limit(limit)
     return ItemPage(items=attach_prices(db, db.scalars(stmt).unique()), total=total)
 
 
