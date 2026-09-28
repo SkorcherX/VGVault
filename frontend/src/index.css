@@ -1127,3 +1127,146 @@ code {
   gap: 0.2rem 1rem;
   margin: 0.6rem 0 0 1.5rem;
 }
+
+/* --- Mobile ------------------------------------------------------------------ */
+/* Desktop-only pieces that phones swap in: hamburger menu, filter drawer toggle. */
+.menu-toggle,
+.filters-toggle {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  /* 16px inputs stop iOS Safari zooming the page on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  button,
+  .dropdown > summary {
+    min-height: 40px;
+  }
+
+  /* Top bar: brand + hamburger; nav and account drop down as a stacked menu. */
+  .topbar {
+    gap: 0.5rem;
+    padding: 0.5rem 16px;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+  .menu-toggle {
+    display: block;
+    margin-left: auto;
+    font-size: 1.2rem;
+    padding: 0.3rem 0.75rem;
+  }
+  .topbar nav,
+  .topbar > .spacer,
+  .topbar .account-link,
+  .topbar .logout {
+    display: none;
+  }
+  .topbar.open nav {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 100%;
+    gap: 0.15rem;
+    padding-top: 0.4rem;
+  }
+  .topbar.open nav a {
+    padding: 0.65rem 0.75rem;
+  }
+  .topbar.open .account-link {
+    display: block;
+    padding: 0.65rem 0.75rem;
+    flex: 1;
+  }
+  .topbar.open .logout {
+    display: block;
+  }
+
+  .page-head {
+    gap: 0.6rem;
+  }
+  .page-head input {
+    max-width: none;
+  }
+  .page-head > .spacer {
+    display: none;
+  }
+  .page-head h1 {
+    flex-basis: 100%;
+  }
+
+  /* Collection: filters collapse behind a toggle so results show first. */
+  .filters-toggle {
+    display: block;
+    width: 100%;
+  }
+  .filters {
+    display: none;
+  }
+  .filters.open {
+    display: flex;
+  }
+  .table th.hide-sm,
+  .table td.hide-sm {
+    display: none;
+  }
+  .table th,
+  .table td {
+    padding: 0.55rem 0.5rem;
+  }
+  .table .title-cell {
+    white-space: normal;
+    min-width: 160px;
+  }
+  .rank-table .title-cell {
+    max-width: 180px;
+  }
+
+  /* Dialogs become full-screen sheets. */
+  .modal-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+  .modal,
+  .modal.wide {
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+    padding: 1rem 16px max(1rem, env(safe-area-inset-bottom));
+  }
+  .modal-head {
+    position: sticky;
+    top: -1rem;
+    margin: -1rem -16px 1rem;
+    padding: 0.75rem 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+  }
+  .ratings {
+    grid-template-columns: 1fr;
+  }
+
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kpi .kpi-value {
+    font-size: 1.3rem;
+  }
+  .bar-row {
+    grid-template-columns: minmax(80px, 35%) 1fr auto;
+  }
+  .bar-row .bar-value {
+    min-width: 0;
+  }
+  .dropdown .menu {
+    max-width: calc(100vw - 32px);
+  }
+  .pager {
+    flex-wrap: wrap;
+  }
+}

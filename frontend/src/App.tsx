@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { api, type User } from './api'
 import Logo from './Logo'
 import AccountPage from './pages/AccountPage'
@@ -34,6 +35,9 @@ export default function App() {
 
 function Shell({ user }: { user: User }) {
   const qc = useQueryClient()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { pathname } = useLocation()
+  useEffect(() => setMenuOpen(false), [pathname])
   const logout = useMutation({
     mutationFn: () => api.post('/auth/logout'),
     onSuccess: () => {
@@ -44,13 +48,21 @@ function Shell({ user }: { user: User }) {
 
   return (
     <div className="shell">
-      <header className="topbar">
+      <header className={menuOpen ? 'topbar open' : 'topbar'}>
         <div className="brand">
           <Logo />
           <span>
             <span className="vg">VG</span>Vault
           </span>
         </div>
+        <button
+          className="ghost menu-toggle"
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
         <nav>
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>
@@ -67,11 +79,11 @@ function Shell({ user }: { user: User }) {
           )}
         </nav>
         <div className="spacer" />
-        <NavLink to="/account" className="muted">
+        <NavLink to="/account" className="muted account-link">
           {user.username}
           {user.role === 'admin' && <span className="badge">admin</span>}
         </NavLink>
-        <button className="ghost" onClick={() => logout.mutate()}>
+        <button className="ghost logout" onClick={() => logout.mutate()}>
           Log out
         </button>
       </header>

@@ -103,6 +103,7 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [editing, setEditing] = useState<Item | 'new' | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => {
     try {
@@ -191,7 +192,10 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
 
   return (
     <div className="collection">
-      <aside className="filters">
+      <button className="ghost filters-toggle" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
+        {showFilters ? 'Hide filters' : 'Search & filters'}
+      </button>
+      <aside className={showFilters ? 'filters open' : 'filters'}>
         <input
           type="search"
           placeholder={readOnly ? 'Search titles…' : 'Search titles & notes…'}
@@ -382,16 +386,16 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                 )}
                 {header('title', 'Title')}
                 {header('platform', 'Platform')}
-                {header('brand', 'Brand')}
-                <th>Category</th>
+                {header('brand', 'Brand', 'hide-sm')}
+                <th className="hide-sm">Category</th>
                 {header('condition', 'Ownership')}
                 {header('rating', 'Condition')}
-                <th>Qty</th>
-                {header('market_price', 'Market', 'num')}
+                <th className="hide-sm">Qty</th>
+                {header('market_price', 'Market', 'num hide-sm')}
                 {header('value', 'Value', 'num')}
-                {showPaid && header('purchase_price', 'Paid')}
-                {showPaid && header('purchase_date', 'Bought')}
-                <th>Status</th>
+                {showPaid && header('purchase_price', 'Paid', 'hide-sm')}
+                {showPaid && header('purchase_date', 'Bought', 'hide-sm')}
+                <th className="hide-sm">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -434,20 +438,20 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                     ))}
                   </td>
                   <td>{item.product.platform.name}</td>
-                  <td>{item.product.platform.brand}</td>
-                  <td>{CATEGORIES[item.product.category]}</td>
+                  <td className="hide-sm">{item.product.platform.brand}</td>
+                  <td className="hide-sm">{CATEGORIES[item.product.category]}</td>
                   <td>{CONDITIONS[item.condition]}</td>
                   <td>
                     <RatingCell item={item} />
                   </td>
-                  <td>{item.quantity}</td>
-                  <td className="num">{money(item.market_price)}</td>
+                  <td className="hide-sm">{item.quantity}</td>
+                  <td className="num hide-sm">{money(item.market_price)}</td>
                   <td className="num">
                     <strong>{money(item.value)}</strong>
                   </td>
-                  {showPaid && <td className="num">{money(item.purchase_price)}</td>}
-                  {showPaid && <td>{item.purchase_date ?? ''}</td>}
-                  <td>{STATUSES[item.status]}</td>
+                  {showPaid && <td className="num hide-sm">{money(item.purchase_price)}</td>}
+                  {showPaid && <td className="hide-sm">{item.purchase_date ?? ''}</td>}
+                  <td className="hide-sm">{STATUSES[item.status]}</td>
                 </tr>
               ))}
               {!items.isLoading && rows.length === 0 && (
