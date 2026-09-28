@@ -78,6 +78,10 @@ platforms:
   - [MSX, msx, Microsoft, null, mixed, false, 1983, null]
   - [Evercade, evercade, Blaze, 9, cartridge, true, 2020, evercade]
   - [Steam Deck, steam-deck, Valve, 9, digital, true, 2022, null]
+  # --- Non-game collectibles
+  - [Amiibo, amiibo, Nintendo, null, none, false, 2014, amiibo]
+  - [Strategy Guide, strategy-guide, Other, null, none, false, null, strategy-guide]
+  - [Magazines, magazines, Other, null, none, false, null, null]
   - [Universal / Multi-platform, universal, Other, null, none, false, null, null]
 
   # --- PAL (Europe/Australia) and Japanese releases: separate platforms, as PriceCharting prices them

@@ -500,6 +500,15 @@ main {
 .checks {
   margin-bottom: 0.75rem;
 }
+.ratings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 0.75rem;
+}
+.ratings > .muted {
+  grid-column: 1 / -1;
+  margin-bottom: 0.25rem;
+}
 
 .picked {
   display: flex;

@@ -7,7 +7,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the full design and roadmap.
 **Status:** Phase 4 complete.
 - Phase 1: accounts & roles, platform catalog, collection with filters.
 - Phase 2: PriceCharting search/import/link, scheduled polite price updates, monthly history backfill, item values, admin price-tracking page.
-- Phase 3: analytics dashboard — value/cost KPIs, value over time, value by brand/platform/era/media/category/condition/genre (click to drill down), most valuable items, biggest movers over 7d/30d/90d/1y.
+- Phase 3: analytics dashboard — value/cost KPIs, value over time, value by brand/platform/era/media/category/ownership/genre (click to drill down), most valuable items, biggest movers over 7d/30d/90d/1y.
 - Phase 4: price alerts (Apprise), scheduled backups & CSV/JSON export, UPC barcode scanning, CSV import with PriceCharting auto-link, sort by market value.
 
 ## Sharing

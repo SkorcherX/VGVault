@@ -24,6 +24,10 @@ class CollectionItem(Base):
     has_manual: Mapped[bool] = mapped_column(default=False)
     has_inserts: Mapped[bool] = mapped_column(default=False)
     grade: Mapped[str | None] = mapped_column(String(32))
+    # Physical condition of each part, 1 (damaged) to 10 (mint); None = not rated.
+    item_rating: Mapped[int | None]
+    box_rating: Mapped[int | None]
+    manual_rating: Mapped[int | None]
     quantity: Mapped[int] = mapped_column(default=1)
     purchase_price: Mapped[Decimal | None] = mapped_column(Money)
     purchase_date: Mapped[date | None]

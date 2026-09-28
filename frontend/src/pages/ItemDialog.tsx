@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   CONDITIONS,
   parseUtc,
+  RATINGS,
   STATUSES,
   type Category,
   type Condition,
@@ -28,6 +29,9 @@ const DEFAULTS: ItemFields = {
   has_manual: false,
   has_inserts: false,
   grade: null,
+  item_rating: null,
+  box_rating: null,
+  manual_rating: null,
   quantity: 1,
   purchase_price: null,
   purchase_date: null,
@@ -145,7 +149,7 @@ export default function ItemDialog({
               ))}
             </select>
           </Field>
-          <Field label="Condition">
+          <Field label="Ownership">
             <select value={fields.condition} onChange={(e) => set('condition', e.target.value as Condition)}>
               {Object.entries(CONDITIONS).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -160,6 +164,33 @@ export default function ItemDialog({
                 <input type="checkbox" checked={fields[k]} onChange={(e) => set(k, e.target.checked)} />
                 {k.replace('has_', '').replace(/^./, (c) => c.toUpperCase())}
               </label>
+            ))}
+          </div>
+          <div className="span2 ratings">
+            <span className="muted small">Condition</span>
+            {(
+              [
+                ['item_rating', 'Game', 'has_item'],
+                ['box_rating', 'Box', 'has_box'],
+                ['manual_rating', 'Manual', 'has_manual'],
+              ] as const
+            ).map(([k, label, part]) => (
+              <Field key={k} label={label}>
+                <select
+                  value={fields[k] ?? ''}
+                  disabled={!fields[part]}
+                  onChange={(e) => set(k, e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Not rated</option>
+                  {Object.entries(RATINGS)
+                    .reverse()
+                    .map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {v} · {l}
+                      </option>
+                    ))}
+                </select>
+              </Field>
             ))}
           </div>
           {fields.condition === 'graded' && (

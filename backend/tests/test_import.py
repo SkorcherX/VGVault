@@ -274,3 +274,73 @@ def test_autolink_recovers_moved_link_by_title(admin):
         assert item["product"]["pricecharting_url"].endswith("/nintendo-64/super-mario-64")
     finally:
         pricing.set_provider(None)
+
+
+def test_gameye_export(admin):
+    headers = ["Platform", "Category", "UserRecordType", "Title", "Country", "Ownership", "CreatedAt",
+               "PricePaid", "PriceSold", "ItemCondition", "Tags", "Notes"]  # fmt: skip
+
+    def ge(platform, category, title, country, ownership):
+        vals = [platform, category, "Owned", title, country, ownership, "Jan 17, 2025", "6.00", "0.0"]
+        vals += ["?", "", ""]
+        return dict(zip(headers, vals, strict=True))
+
+    rows = [
+        ge("Sega Game Gear", "Games", "Aladdin", "United States of America", "Loose+"),
+        ge("NES/Famicom", "Games", "Gradius", "Japan", "CIB"),
+        ge("amiibo", "Toys To Life", "Mario", "United States of America", "New"),
+        ge("Strategy Guide", "Print Media", "Zelda Guide", "United Kingdom", "Loose"),
+        ge("Nintendo Power", "Print Media", "Issue 1", "United States of America", "CIB+"),
+        ge("TurboGrafx 16 CD", "Systems", "Duo", "United States of America", "Boxed"),
+    ]
+    m = admin.post("/api/import/suggest", json={"headers": headers, "rows": rows}).json()
+    assert m["status"] == "UserRecordType" and m["condition"] == "Ownership"
+    assert m["region"] == "Country" and m["purchase_date"] == "CreatedAt"
+    r = admin.post("/api/import/validate", json={"rows": rows, "mapping": m}).json()
+    assert r["summary"]["errors"] == 0
+    assert all(not x["warnings"] for x in r["rows"]), [x["warnings"] for x in r["rows"]]
+    assert [x["platform"] for x in r["rows"]] == [
+        "Sega Game Gear", "Famicom", "Amiibo", "Strategy Guide", "Magazines", "TurboGrafx-CD",
+    ]  # fmt: skip
+    assert [x["condition"] for x in r["rows"]] == ["loose", "cib", "new", "loose", "cib", "cib"]
+
+
+def test_gameye_ratings_and_odd_values(admin):
+    headers = [
+        "Platform",
+        "Title",
+        "Country",
+        "Ownership",
+        "ItemCondition",
+        "BoxCondition",
+        "ManualCondition",
+    ]
+    rows = [
+        dict(zip(headers, vals, strict=True))
+        for vals in [
+            ["Nintendo 64", "Mario", "United States of America", "Loose+", "0.8", "?", "1.0"],
+            ["Nintendo 64DD", "Mario Artist", "Japan", "CIB", "1.0", "0.90000004", "1.0"],
+            ["Atari Jaguar CD", "Myst", "World", "M", "?", "?", "0.7"],
+            ["PC", "Doom", "", "Digital", "?", "?", "?"],
+        ]
+    ]
+    m = admin.post("/api/import/suggest", json={"headers": headers}).json()
+    assert m["manual_rating"] == "ManualCondition" and m["condition"] == "Ownership"
+    r = admin.post("/api/import/validate", json={"rows": rows, "mapping": m}).json()
+    assert all(x["ok"] and not x["warnings"] for x in r["rows"]), [x["warnings"] for x in r["rows"]]
+    assert [x["condition"] for x in r["rows"]] == ["loose", "cib", "manual_only", "loose"]
+    assert r["rows"][1]["platform"] == "Nintendo 64 (JP)"
+    admin.post("/api/import/commit", json={"rows": rows, "mapping": m})
+    items = {i["product"]["title"]: i for i in admin.get("/api/collection?limit=50").json()["items"]}
+    mario = items["Mario"]
+    assert (mario["item_rating"], mario["box_rating"], mario["manual_rating"]) == (8, None, 10)
+    assert mario["has_manual"] and not mario["has_box"]  # Loose+ with a rated manual
+    assert (items["Mario Artist"]["box_rating"], items["Myst"]["manual_rating"]) == (9, 7)
+
+
+def test_parse_rating():
+    from app.services.importer import parse_rating
+
+    assert [parse_rating(v) for v in ["0.8", "0.90000004", "1.0", "7", "10", "85%", "?", ""]] == [
+        8, 9, 10, 7, 10, 9, None, None,
+    ]  # fmt: skip

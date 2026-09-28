@@ -21,7 +21,7 @@ from app.schemas.collection import (
     ItemUpdate,
     Summary,
 )
-from app.services.filters import Filters, items_query
+from app.services.filters import Filters, items_query, overall_rating
 from app.services.valuation import attach_prices
 
 router = APIRouter(prefix="/collection", tags=["collection"])
@@ -31,6 +31,7 @@ SORTS = {
     "platform": Platform.name,
     "brand": Platform.brand,
     "condition": CollectionItem.condition,
+    "rating": overall_rating,
     "purchase_price": CollectionItem.purchase_price,
     "purchase_date": CollectionItem.purchase_date,
     "created_at": CollectionItem.created_at,
@@ -127,6 +128,7 @@ def facets(db: DB, user: CurrentUser):
 EXPORT_FIELDS = [
     "title", "platform", "brand", "category", "region", "status", "condition", "quantity",
     "has_item", "has_box", "has_manual", "has_inserts", "grade",
+    "item_rating", "box_rating", "manual_rating",
     "purchase_price", "purchase_date", "sold_price", "sold_date", "target_price",
     "location", "acquired_from", "tags", "notes", "market_price", "value", "priced_on",
     "pricecharting_id", "pricecharting_url", "upc",
@@ -149,6 +151,9 @@ def _export_row(item) -> dict:
         "has_manual": item.has_manual,
         "has_inserts": item.has_inserts,
         "grade": item.grade,
+        "item_rating": item.item_rating,
+        "box_rating": item.box_rating,
+        "manual_rating": item.manual_rating,
         "purchase_price": item.purchase_price,
         "purchase_date": item.purchase_date,
         "sold_price": item.sold_price,

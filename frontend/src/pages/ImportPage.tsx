@@ -19,7 +19,7 @@ type Row = Record<string, string>
 const FIELD_LABELS: Record<string, string> = {
   title: 'Title *',
   platform: 'Platform *',
-  condition: 'Condition',
+  condition: 'Ownership',
   status: 'Status (owned / wishlist / sold)',
   quantity: 'Quantity',
   purchase_price: 'Purchase price',
@@ -31,6 +31,9 @@ const FIELD_LABELS: Record<string, string> = {
   has_manual: 'Has manual',
   has_inserts: 'Has inserts',
   grade: 'Grade',
+  item_rating: 'Condition: game/cart (1-10)',
+  box_rating: 'Condition: box (1-10)',
+  manual_rating: 'Condition: manual (1-10)',
   sold_price: 'Sold price',
   sold_date: 'Sold date',
   target_price: 'Target price',
@@ -195,8 +198,14 @@ export default function ImportPage() {
           setParseError('No rows found. The first line must be column headers.')
           return
         }
-        setRowLabels(res.data.map((_, i) => `row ${i + 2}`))
-        loadRows(fields, res.data)
+        // A trailing comma on every line (GamEye exports) lands in __parsed_extra; drop it.
+        const data = res.data.map((row) => {
+          const { __parsed_extra, ...rest } = row as Row & { __parsed_extra?: unknown }
+          void __parsed_extra
+          return rest
+        })
+        setRowLabels(data.map((_, i) => `row ${i + 2}`))
+        loadRows(fields, data)
       },
       error: (err) => setParseError(err.message),
     })
@@ -314,7 +323,7 @@ export default function ImportPage() {
               </select>
             </label>
             <label className="field">
-              <span>Condition</span>
+              <span>Ownership</span>
               <select
                 value={defaults.default_condition}
                 onChange={(e) => setDefault('default_condition', e.target.value as Condition)}
@@ -432,7 +441,7 @@ export default function ImportPage() {
                   <th>#</th>
                   <th>Title</th>
                   <th>Platform</th>
-                  <th>Condition</th>
+                  <th>Ownership</th>
                   <th>Status</th>
                   <th className="num">Qty</th>
                   <th className="num">Paid</th>

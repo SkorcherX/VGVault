@@ -21,6 +21,7 @@ from app.pricing.pricecharting import console_slug_from_url, normalize_pricechar
 FIELDS = [
     "title", "platform", "category", "region", "status", "condition", "quantity",
     "has_item", "has_box", "has_manual", "has_inserts", "grade",
+    "item_rating", "box_rating", "manual_rating",
     "purchase_price", "purchase_date", "sold_price", "sold_date", "target_price",
     "location", "acquired_from", "tags", "notes", "pricecharting_url", "upc",
 ]  # fmt: skip
@@ -30,15 +31,18 @@ HEADER_HINTS = {
     "title": ["title", "name", "game", "gamename", "gametitle", "productname", "product", "item"],
     "platform": ["platform", "console", "consolename", "system", "systemname"],
     "category": ["category", "type", "itemtype"],
-    "region": ["region"],
-    "status": ["status", "list", "ownership"],
-    "condition": ["condition", "completeness", "cond"],
+    "region": ["region", "country"],
+    "status": ["status", "list", "userrecordtype", "recordtype"],
+    "condition": ["condition", "completeness", "cond", "ownership"],
     "quantity": ["quantity", "qty", "count", "copies", "amount", "number", "owned"],
     "has_item": ["hasitem", "cart", "cartridge", "disc", "game"],
     "has_box": ["hasbox", "box", "boxed"],
     "has_manual": ["hasmanual", "manual"],
     "has_inserts": ["hasinserts", "inserts"],
     "grade": ["grade"],
+    "item_rating": ["itemrating", "itemcondition", "cartcondition", "disccondition", "gamecondition"],
+    "box_rating": ["boxrating", "boxcondition"],
+    "manual_rating": ["manualrating", "manualcondition"],
     "purchase_price": ["purchaseprice", "price", "paid", "pricepaid", "cost", "pricepaidusd"],
     "purchase_date": [
         "purchasedate",
@@ -47,9 +51,10 @@ HEADER_HINTS = {
         "acquired",
         "dateadded",
         "added",
+        "createdat",
         "date",
     ],
-    "sold_price": ["soldprice", "saleprice"],
+    "sold_price": ["soldprice", "saleprice", "pricesold"],
     "sold_date": ["solddate", "datesold"],
     "target_price": ["targetprice", "target", "maxprice"],
     "location": ["location", "shelf", "storage"],
@@ -64,7 +69,7 @@ HEADER_HINTS = {
         "seller",
         "where",
         "bought",
-    ],  # fmt: skip
+    ],
     "tags": ["tags", "tag", "labels"],
     "notes": ["notes", "note", "comments", "comment"],
     "pricecharting_url": ["pricechartingurl", "pricecharting", "url", "link"],
@@ -72,12 +77,12 @@ HEADER_HINTS = {
 }
 
 CONDITION_WORDS = {
-    Condition.loose: ["loose", "cartonly", "disconly", "gameonly", "used", "cart", "disc", "l"],
+    Condition.loose: ["loose", "cartonly", "disconly", "gameonly", "used", "cart", "disc", "l", "digital"],
     Condition.cib: ["cib", "complete", "completeinbox", "boxed", "c"],
     Condition.new: ["new", "sealed", "nib", "newinbox", "sib", "sealedinbox", "mint", "n"],
     Condition.graded: ["graded", "wata", "vga", "cgc"],
     Condition.box_only: ["boxonly", "box"],
-    Condition.manual_only: ["manualonly", "manual"],
+    Condition.manual_only: ["manualonly", "manual", "m"],
 }
 STATUS_WORDS = {
     ItemStatus.owned: ["owned", "own", "have", "collection", "yes", "in collection", "incollection"],
@@ -86,11 +91,25 @@ STATUS_WORDS = {
 }
 CATEGORY_WORDS = {
     Category.game: ["game", "games", "videogame", "software"],
-    Category.console: ["console", "system", "hardware", "consoles"],
+    Category.console: ["console", "system", "hardware", "consoles", "systems"],
     Category.pc_big_box: ["pcbigbox", "bigbox"],
     Category.controller: ["controller", "controllers", "gamepad", "pad"],
-    Category.accessory: ["accessory", "accessories", "peripheral"],
-    Category.other: ["other", "misc", "merch"],
+    Category.accessory: ["accessory", "accessories", "peripheral", "gameaccessories"],
+    Category.other: [
+        "other",
+        "misc",
+        "merch",
+        "printmedia",
+        "book",
+        "books",
+        "guide",
+        "strategyguide",
+        "magazine",
+        "toystolife",
+        "amiibo",
+        "figure",
+        "figures",
+    ],
 }
 # Common platform names that don't normalize onto a seeded name/slug.
 PLATFORM_ALIASES = {
@@ -114,6 +133,14 @@ PLATFORM_ALIASES = {
     "5200": "atari-5200", "lynx": "atari-lynx", "jaguar": "jaguar", "tg16": "turbografx-16",
     "turbografx": "turbografx-16", "pcengine": "pc-engine", "neogeo": "neo-geo-aes",
     "ngpc": "neo-geo-pocket-color",
+    # GamEye names
+    "nesfamicom": "nes", "snessuperfamicom": "snes", "segagenesismegadrive": "genesis",
+    "turbografx16cd": "turbografx-cd", "turbografxcd": "turbografx-cd", "segacdmegacd": "sega-cd",
+    "turbografx16pcengine": "turbografx-16", "nintendo64dd": "n64", "64dd": "n64",
+    "atarijaguarcd": "jaguar", "jaguarcd": "jaguar", "segacd32x": "sega-cd",
+    "strategyguides": "strategy-guide",
+    "nintendopower": "magazines", "electronicgamingmonthly": "magazines", "egm": "magazines",
+    "gamepro": "magazines", "gameinformer": "magazines", "magazine": "magazines",
     "pc": "pc", "windows": "pc", "dos": "pc", "pcgames": "pc", "steam": "pc",
 }  # fmt: skip
 TRUE_WORDS = {"y", "yes", "true", "1", "x", "✓", "✔", "t"}
@@ -275,6 +302,23 @@ def parse_bool(value: str) -> bool | None:
     raise ValueError(f"not yes/no: {value!r}")
 
 
+def parse_rating(value: str) -> int | None:
+    """1-10 condition score. Accepts 0-1 fractions (GamEye: 0.8), 1-10, or percentages."""
+    if (value or "").strip().lower() in BLANKS:
+        return None
+    try:
+        n = float(value.strip().rstrip("%"))
+    except ValueError:
+        raise ValueError(f"not a 1-10 rating: {value!r}") from None
+    if value.strip().endswith("%") or n > 10:
+        n /= 10
+    elif n <= 1 and "." in value:
+        n *= 10
+    if not 0 <= n <= 10:
+        raise ValueError(f"not a 1-10 rating: {value!r}")
+    return max(1, int(n + 0.5)) if n else None
+
+
 REGION_WORDS = {
     "pal": "PAL", "eu": "PAL", "eur": "PAL", "europe": "PAL", "european": "PAL", "uk": "PAL",
     "au": "PAL", "aus": "PAL", "australia": "PAL",
@@ -282,7 +326,14 @@ REGION_WORDS = {
     "ntscj": "NTSC-J",
     "us": "NTSC-U", "usa": "NTSC-U", "na": "NTSC-U", "ntsc": "NTSC-U", "ntscu": "NTSC-U",
     "northamerica": "NTSC-U",
+    # Country names (GamEye exports a Country column)
+    "unitedstatesofamerica": "NTSC-U", "unitedstates": "NTSC-U", "america": "NTSC-U",
+    "canada": "NTSC-U", "mexico": "NTSC-U",
+    "unitedkingdom": "PAL", "greatbritain": "PAL", "england": "PAL", "germany": "PAL",
+    "france": "PAL", "italy": "PAL", "spain": "PAL", "netherlands": "PAL", "sweden": "PAL",
+    "newzealand": "PAL", "ireland": "PAL",
 }  # fmt: skip
+NO_REGION_WORDS = {"world", "worldwide", "global", "international", "regionfree", "all"}
 # Japanese counterparts that are their own platforms rather than "<base>-jp".
 JP_EQUIVALENTS = {"nes": "famicom", "snes": "super-famicom", "turbografx-16": "pc-engine"}
 
@@ -531,7 +582,7 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
 
         region_raw = cell("region")
         region = parse_region(region_raw) if region_raw else None
-        if region_raw and region is None:
+        if region_raw and region is None and norm(region_raw) not in NO_REGION_WORDS:
             r.warnings.append(f"region {region_raw!r} not recognized (use NTSC-U, PAL or NTSC-J)")
         # Distrust links that look like they belong to another game or console; the item is then
         # linked by title search later instead of being priced as the wrong game.
@@ -583,6 +634,8 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         for f in ("purchase_price", "sold_price", "target_price"):
             try:
                 v[f] = parse_money(cell(f))
+                if f != "purchase_price" and v[f] == 0:
+                    v[f] = None  # trackers export 0.0 for "not set"
             except ValueError as e:
                 r.errors.append(f"{f.replace('_', ' ')}: {e}")
         qty = v.get("quantity") or 1
@@ -602,6 +655,18 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
                     v[f] = parse_bool(raw)
                 except ValueError as e:
                     r.warnings.append(f"{f}: {e}, ignored")
+        for f, part in (
+            ("item_rating", "has_item"),
+            ("box_rating", "has_box"),
+            ("manual_rating", "has_manual"),
+        ):
+            try:
+                v[f] = parse_rating(cell(f))
+            except ValueError as e:
+                r.warnings.append(f"{f.replace('_', ' ')}: {e}, ignored")
+                v[f] = None
+            if v[f] is not None and part not in v:
+                v[part] = True  # a rated part is there
         # Sensible component defaults from condition when not given
         v.setdefault("has_item", v["condition"] not in ("box_only", "manual_only"))
         v.setdefault("has_box", v["condition"] in ("cib", "new", "box_only"))
@@ -688,6 +753,9 @@ def commit(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options)
                         "has_manual",
                         "has_inserts",
                         "grade",
+                        "item_rating",
+                        "box_rating",
+                        "manual_rating",
                         "purchase_price",
                         "purchase_date",
                         "sold_price",

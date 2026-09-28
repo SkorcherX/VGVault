@@ -90,6 +90,22 @@ def test_collection_filters(admin):
     assert facets["brands"] == ["Microsoft", "Nintendo", "Sony"]
 
 
+def test_condition_rating_filter_and_sort(admin):
+    # Overall condition = lowest rating among parts the item has.
+    _add_game(admin, "Mint", condition="cib", has_box=True, has_manual=True, item_rating=10, box_rating=9)
+    _add_game(admin, "Rough box", condition="cib", has_box=True, item_rating=10, box_rating=3)
+    _add_game(admin, "Box gone", item_rating=7, box_rating=2)  # box rating ignored: no box
+    _add_game(admin, "Unrated")
+
+    def titles(**params):
+        return [i["product"]["title"] for i in admin.get("/api/collection", params=params).json()["items"]]
+
+    assert titles(rating="mint") == ["Mint"]
+    assert titles(rating="excellent") == ["Box gone"]
+    assert sorted(titles(rating=["poor", "unrated"])) == ["Rough box", "Unrated"]
+    assert titles(sort="rating", order="desc") == ["Mint", "Box gone", "Rough box", "Unrated"]
+
+
 def test_bulk_update_and_delete(admin):
     a = _add_game(admin, "A")
     b = _add_game(admin, "B")

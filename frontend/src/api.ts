@@ -35,6 +35,47 @@ export const CONDITIONS: Record<Condition, string> = {
   manual_only: 'Manual only',
 }
 
+/** Physical condition of a part, 1-10. */
+export const RATINGS: Record<number, string> = {
+  10: 'Mint',
+  9: 'Near mint',
+  8: 'Excellent',
+  7: 'Very good',
+  6: 'Good',
+  5: 'Fair',
+  4: 'Worn',
+  3: 'Poor',
+  2: 'Rough',
+  1: 'Damaged',
+}
+
+export type RatingBand = 'mint' | 'excellent' | 'good' | 'poor' | 'unrated'
+export const RATING_BANDS: Record<RatingBand, string> = {
+  mint: 'Mint (9-10)',
+  excellent: 'Excellent (7-8)',
+  good: 'Good (5-6)',
+  poor: 'Poor (1-4)',
+  unrated: 'Not rated',
+}
+
+type Rated = Pick<ItemFields, 'item_rating' | 'box_rating' | 'manual_rating' | 'has_item' | 'has_box' | 'has_manual'>
+const PARTS = [
+  ['Game', 'item_rating', 'has_item'],
+  ['Box', 'box_rating', 'has_box'],
+  ['Manual', 'manual_rating', 'has_manual'],
+] as const
+
+/** Ratings of the parts the item has, e.g. [['Game', 10], ['Box', 3]]. */
+export function partRatings(item: Rated): [string, number][] {
+  return PARTS.flatMap(([label, k, has]) => (item[has] && item[k] != null ? [[label, item[k]] as [string, number]] : []))
+}
+
+/** Overall condition: the lowest-rated part the item has (matches the server's sort and filter). */
+export function overallRating(item: Rated): number | null {
+  const r = partRatings(item).map(([, n]) => n)
+  return r.length ? Math.min(...r) : null
+}
+
 export interface User {
   id: number
   username: string
@@ -81,6 +122,9 @@ export interface ItemFields {
   has_manual: boolean
   has_inserts: boolean
   grade: string | null
+  item_rating: number | null
+  box_rating: number | null
+  manual_rating: number | null
   quantity: number
   purchase_price: string | null
   purchase_date: string | null

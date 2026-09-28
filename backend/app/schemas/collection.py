@@ -15,6 +15,9 @@ class ItemFields(BaseModel):
     has_manual: bool = False
     has_inserts: bool = False
     grade: str | None = None
+    item_rating: int | None = Field(default=None, ge=1, le=10)
+    box_rating: int | None = Field(default=None, ge=1, le=10)
+    manual_rating: int | None = Field(default=None, ge=1, le=10)
     quantity: int = Field(default=1, ge=1)
     purchase_price: Decimal | None = Field(default=None, ge=0)
     purchase_date: date | None = None
@@ -42,6 +45,9 @@ class ItemUpdate(BaseModel):
     has_manual: bool | None = None
     has_inserts: bool | None = None
     grade: str | None = None
+    item_rating: int | None = Field(default=None, ge=1, le=10)
+    box_rating: int | None = Field(default=None, ge=1, le=10)
+    manual_rating: int | None = Field(default=None, ge=1, le=10)
     quantity: int | None = Field(default=None, ge=1)
     purchase_price: Decimal | None = Field(default=None, ge=0)
     purchase_date: date | None = None

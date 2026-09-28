@@ -52,7 +52,7 @@ const GROUP_LABELS: Record<GroupBy, string> = {
   era: 'Era',
   media_type: 'Media',
   category: 'Category',
-  condition: 'Condition',
+  condition: 'Ownership',
   genre: 'Genre',
 }
 const MOVER_PERIODS = { '7D': 7, '30D': 30, '90D': 90, '1Y': 365 } as const
@@ -213,7 +213,7 @@ export default function DashboardPage() {
           onChange={(v) => update({ media_type: v })}
         />
         <MultiSelect
-          label="Condition"
+          label="Ownership"
           options={Object.entries(CONDITIONS).map(([value, label]) => ({ value: value as Condition, label }))}
           value={filters.condition}
           onChange={(v) => update({ condition: v })}

@@ -7,6 +7,10 @@ import {
   CATEGORIES,
   CONDITIONS,
   MEDIA_TYPES,
+  overallRating,
+  partRatings,
+  RATING_BANDS,
+  RATINGS,
   STATUSES,
   type Category,
   type Condition,
@@ -14,6 +18,7 @@ import {
   type Item,
   type ItemStatus,
   type MediaType,
+  type RatingBand,
   type Summary,
 } from '../api'
 import { CheckList, ErrorText, money } from '../components'
@@ -28,6 +33,7 @@ interface Filters {
   era: string[]
   media_type: MediaType[]
   condition: Condition[]
+  rating: RatingBand[]
   region: string[]
   tag: string
   location: string
@@ -43,6 +49,7 @@ const EMPTY_FILTERS: Filters = {
   era: [],
   media_type: [],
   condition: [],
+  rating: [],
   region: [],
   tag: '',
   location: '',
@@ -70,6 +77,7 @@ type SortKey =
   | 'platform'
   | 'brand'
   | 'condition'
+  | 'rating'
   | 'market_price'
   | 'value'
   | 'purchase_price'
@@ -215,10 +223,16 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
           onChange={(v) => update({ media_type: v })}
         />
         <CheckList
-          label="Condition"
+          label="Ownership"
           options={opts(CONDITIONS)}
           value={filters.condition}
           onChange={(v) => update({ condition: v })}
+        />
+        <CheckList
+          label="Condition"
+          options={opts(RATING_BANDS)}
+          value={filters.rating}
+          onChange={(v) => update({ rating: v })}
         />
         <CheckList
           label="Region"
@@ -321,9 +335,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
             <select
               value=""
               onChange={(e) => e.target.value && bulk.mutate({ condition: e.target.value })}
-              aria-label="Set condition"
+              aria-label="Set ownership"
             >
-              <option value="">Set condition…</option>
+              <option value="">Set ownership…</option>
               {opts(CONDITIONS).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -370,7 +384,8 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                 {header('platform', 'Platform')}
                 {header('brand', 'Brand')}
                 <th>Category</th>
-                {header('condition', 'Condition')}
+                {header('condition', 'Ownership')}
+                {header('rating', 'Condition')}
                 <th>Qty</th>
                 {header('market_price', 'Market', 'num')}
                 {header('value', 'Value', 'num')}
@@ -422,6 +437,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                   <td>{item.product.platform.brand}</td>
                   <td>{CATEGORIES[item.product.category]}</td>
                   <td>{CONDITIONS[item.condition]}</td>
+                  <td>
+                    <RatingCell item={item} />
+                  </td>
                   <td>{item.quantity}</td>
                   <td className="num">{money(item.market_price)}</td>
                   <td className="num">
@@ -434,7 +452,7 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
               ))}
               {!items.isLoading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="muted empty">
+                  <td colSpan={13} className="muted empty">
                     {readOnly ? 'No items match these filters.' : 'Nothing here yet. Add an item or loosen the filters.'}
                   </td>
                 </tr>
@@ -468,5 +486,15 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         />
       )}
     </div>
+  )
+}
+
+function RatingCell({ item }: { item: Item }) {
+  const overall = overallRating(item)
+  if (overall == null) return <span className="muted">—</span>
+  return (
+    <span title={partRatings(item).map(([label, n]) => `${label}: ${n} · ${RATINGS[n]}`).join('\n')}>
+      {overall} · {RATINGS[overall]}
+    </span>
   )
 }
