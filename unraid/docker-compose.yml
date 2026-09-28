@@ -1,0 +1,22 @@
+# VGVault for Unraid's Compose Manager / Compose Manager Plus plugin.
+# Paste into the stack's compose file, and put your settings in its ENV file
+# (see .env.example). Update with "Update Stack", not the Docker tab's button.
+services:
+  vgvault:
+    image: ghcr.io/skorcherx/vgvault:latest
+    container_name: vgvault
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      # Absolute path: a relative one would land on the USB flash drive.
+      - ${APPDATA:-/mnt/user/appdata/vgvault}:/config
+    environment:
+      - TZ=${TZ:-America/Chicago}
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-false}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+    labels:
+      net.unraid.docker.icon: https://raw.githubusercontent.com/SkorcherX/VGVault/main/frontend/public/favicon.svg
+      net.unraid.docker.webui: http://[IP]:[PORT:8080]/
+    restart: unless-stopped

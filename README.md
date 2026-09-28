@@ -68,6 +68,8 @@ Add the template URL in *Docker → Template repositories*:
 | `COOKIE_SECURE` | `false` | Set `true` behind HTTPS |
 | `DATABASE_URL` | SQLite in `/config` | Optional Postgres |
 
+**Compose Manager (Plus) plugin:** paste [`unraid/docker-compose.yml`](unraid/docker-compose.yml) into the stack's compose file and [`unraid/.env.example`](unraid/.env.example) into its ENV file. Keep `/config` on an absolute path under `/mnt/user/appdata/` (a relative path ends up on the flash drive), and update with **Update Stack** rather than the Docker tab's update button.
+
 ## Development
 
 Backend (Python 3.12+):

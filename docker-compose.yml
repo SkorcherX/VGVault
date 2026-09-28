@@ -8,7 +8,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./config:/config
+      # Set CONFIG_PATH to an absolute path if your compose tool stores the
+      # project somewhere odd (Unraid Compose Manager: use unraid/docker-compose.yml).
+      - ${CONFIG_PATH:-./config}:/config
     environment:
       - TZ=America/Chicago
       - PUID=1000
