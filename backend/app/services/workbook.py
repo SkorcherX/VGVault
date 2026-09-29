@@ -20,7 +20,14 @@ MAX_EMPTY_RUN = 200  # stop scanning a sheet after this many blank rows in a row
 HEADER_SCAN_ROWS = 25
 HYPERLINK_RE = re.compile(r'^=\s*HYPERLINK\(\s*"([^"]+)"', re.IGNORECASE)
 
-KNOWN_HEADERS = {norm(f) for f in FIELDS} | {h for hints in HEADER_HINTS.values() for h in hints}
+# Headers that don't feed a field but still mark a header row ("Name | Value | Information").
+EXTRA_HEADERS = {"value", "information", "info", "details", "description", "link", "links"}
+KNOWN_HEADERS = (
+    {norm(f) for f in FIELDS} | {h for hints in HEADER_HINTS.values() for h in hints} | EXTRA_HEADERS
+)
+TITLE_HEADERS = {"title", *HEADER_HINTS["title"]}
+# Tabs laid out as one column per platform, each a list of titles (a quick want list).
+LIST_SHEETS = {"wishlist", "wishlists", "wantlist", "wants", "wanted", "wishes"}
 
 
 def cell_text(value) -> str:
@@ -38,10 +45,14 @@ def cell_text(value) -> str:
 
 
 def _header_row(ws) -> int | None:
-    """The row (1-based) among the first few that looks most like column headers."""
+    """The row (1-based) among the first few that looks most like column headers. It must name
+    a title column, so summary tabs ("Console | Count | Value") aren't read as items."""
     best, best_score = None, 1
     for r, row in enumerate(ws.iter_rows(max_row=HEADER_SCAN_ROWS, values_only=True), start=1):
-        score = sum(1 for v in row if isinstance(v, str) and norm(v) in KNOWN_HEADERS)
+        names = [norm(v) for v in row if isinstance(v, str)]
+        if not TITLE_HEADERS & set(names):
+            continue
+        score = sum(1 for n in names if n in KNOWN_HEADERS)
         if score > best_score:
             best, best_score = r, score
     return best
@@ -75,6 +86,8 @@ def read_workbook(data: bytes) -> list[dict]:
         sheets.append(info)
         header_row = _header_row(ws)
         if header_row is None:
+            if norm(ws.title) in LIST_SHEETS:
+                _read_list_sheet(ws, info)
             continue
 
         # Column index -> unique header name (blank headers are skipped)
@@ -84,7 +97,7 @@ def read_workbook(data: bytes) -> list[dict]:
             next(ws.iter_rows(min_row=header_row, max_row=header_row, values_only=True)), start=1
         ):
             name = cell_text(v)
-            if not name:
+            if not name or not isinstance(v, str):  # blank, or a total sitting in the header row
                 continue
             seen[name] = seen.get(name, 0) + 1
             columns[c] = name if seen[name] == 1 else f"{name} ({seen[name]})"
@@ -92,6 +105,7 @@ def read_workbook(data: bytes) -> list[dict]:
         rows: list[dict[str, str]] = []
         row_numbers: list[int] = []
         link_columns: set[str] = set()
+        filled: set[str] = set()
         empty_run = 0
         for r in range(header_row + 1, ws.max_row + 1):
             row = {}
@@ -99,6 +113,7 @@ def read_workbook(data: bytes) -> list[dict]:
                 text = cell_text(ws.cell(r, c).value)
                 if text:
                     row[name] = text
+                    filled.add(name)
                 link = _link(ws.cell(r, c), wf.cell(r, c))
                 if link:
                     row[f"{name} (link)"] = link
@@ -116,7 +131,35 @@ def read_workbook(data: bytes) -> list[dict]:
                 break
 
         info["header_row"] = header_row
-        info["headers"] = [*columns.values(), *sorted(link_columns), SHEET_COLUMN]
+        # Columns with nothing under them (a "TOTAL" label beside the header) aren't offered, so
+        # tabs that differ only in such labels still import together.
+        headers = [n for n in columns.values() if n in filled or f"{n} (link)" in link_columns]
+        info["headers"] = [*headers, *sorted(link_columns), SHEET_COLUMN]
         info["rows"] = rows
         info["row_numbers"] = row_numbers
     return sheets
+
+
+def _read_list_sheet(ws, info: dict) -> None:
+    """A want list with a column per platform: the first filled row names the platforms and the
+    cells below are titles. Rows come out as Title / Platform / Status like any other sheet."""
+    columns: dict[int, str] = {}
+    rows: list[dict[str, str]] = []
+    row_numbers: list[int] = []
+    for r, values in enumerate(ws.iter_rows(max_row=min(ws.max_row, MAX_ROWS), values_only=True), start=1):
+        if not columns:
+            columns = {c: cell_text(v) for c, v in enumerate(values) if cell_text(v)}
+            if columns:
+                info["header_row"] = r
+            continue
+        for c, platform in columns.items():
+            title = cell_text(values[c]) if c < len(values) else ""
+            if title:
+                rows.append(
+                    {"Title": title, "Platform": platform, "Status": "wishlist", SHEET_COLUMN: ws.title}
+                )
+                row_numbers.append(r)
+    if rows:
+        info["headers"] = ["Title", "Platform", "Status", SHEET_COLUMN]
+        info["rows"] = rows
+        info["row_numbers"] = row_numbers

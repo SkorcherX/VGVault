@@ -43,6 +43,7 @@ HEADER_HINTS = {
     "item_rating": ["itemrating", "itemcondition", "cartcondition", "disccondition", "gamecondition"],
     "box_rating": ["boxrating", "boxcondition"],
     "manual_rating": ["manualrating", "manualcondition"],
+    # Not "value": in hand-kept sheets that's a looked-up market value, not what was paid.
     "purchase_price": ["purchaseprice", "price", "paid", "pricepaid", "cost", "pricepaidusd"],
     "purchase_date": [
         "purchasedate",
@@ -119,7 +120,9 @@ PLATFORM_ALIASES = {
     "nintendogamecube": "gamecube",
     "gb": "game-boy", "gbc": "game-boy-color", "gba": "game-boy-advance",
     "ds": "nintendo-ds", "nds": "nintendo-ds",
-    "3ds": "nintendo-3ds", "switch": "switch", "nintendoswitch": "switch", "switch2": "switch-2",
+    "3ds": "nintendo-3ds", "n3ds": "nintendo-3ds", "new3ds": "nintendo-3ds",
+    "newnintendo3ds": "nintendo-3ds", "3dsxl": "nintendo-3ds", "gameboyclassic": "game-boy",
+    "switch": "switch", "nintendoswitch": "switch", "switch2": "switch-2",
     "wiiu": "wii-u", "nintendowii": "wii", "nintendowiiu": "wii-u",
     "ps1": "ps1", "psx": "ps1", "psone": "ps1", "playstation1": "ps1", "sonyplaystation": "ps1",
     "ps2": "ps2", "ps3": "ps3", "ps4": "ps4", "ps5": "ps5", "vita": "ps-vita", "psvita": "ps-vita",
@@ -387,6 +390,17 @@ class PlatformMatcher:
             return platform
         return self.variants.get((_base_slug(platform.slug), region), platform)
 
+    def find_in_text(
+        self, text: str, region: str | None = None, default_region: str | None = None
+    ) -> Platform | None:
+        """The platform named inside free text, longest name first: "Sega Nomad", "Microsoft
+        Xbox 360 (Premium 20GB)", "Super Gameboy Advance"."""
+        n = norm(text)
+        for key in sorted((k for k in self.by_key if len(k) >= 3), key=len, reverse=True):
+            if key in n:
+                return self.match_name(key, region, default_region)
+        return None
+
     def for_url(self, url: str | None) -> list[Platform]:
         return self.by_pc_slug.get(console_slug_from_url(url) or "", []) if url else []
 
@@ -529,6 +543,90 @@ def link_matches_title(title: str, url: str) -> bool:
     return len(t & s) / min(len(t), len(s)) >= 0.5
 
 
+_LOOSE_WORDS = {"loose", "cartonly", "disconly", "gameonly"}
+_NEW_WORDS = {"sealed", "new", "nib", "sib"}
+_CIB_WORDS = {"cib", "complete", "completeinbox"}
+
+
+@dataclass
+class TitleHints:
+    title: str
+    condition: Condition | None = None
+    has_manual: bool | None = None
+    extras: list[str] = field(default_factory=list)  # "with Guide", for notes
+
+
+def _hint_words(text: str, hints: TitleHints) -> str:
+    """Take condition words out of `text`, noting them in `hints`; return what's left."""
+    kept = []
+    for w in re.split(r"\s+", text.strip()):
+        n = norm(w)
+        if n in _LOOSE_WORDS:
+            hints.condition = Condition.loose
+        elif n in _NEW_WORDS:
+            hints.condition = Condition.new
+        elif n in _CIB_WORDS:
+            hints.condition = Condition.cib
+        elif w:
+            kept.append(w)
+    return " ".join(kept)
+
+
+def title_hints(title: str) -> TitleHints:
+    """Hand-kept sheets put condition in the title: "Desert Strike (Loose)", "Final Fantasy X
+    (Sealed)", "Dragon Warrior W/ Manual", "Mortal Kombat (No Manual)", "R-Type, W/ Manual Loose".
+    Strip those, and move extras ("W/ Guide") to notes. Editions ("(Big Box)") stay in the title."""
+    hints = TitleHints(title)
+
+    def paren(m: re.Match) -> str:
+        parts = [p.strip() for p in m.group(1).split(",") if p.strip()]
+        if not any(_is_hint(p) for p in parts):
+            return m.group(0)  # "(Big Box)", "(Collectors)": part of the name
+        for p in parts:
+            _apply_hint(p, hints)
+        return " "
+
+    rest = re.sub(r"\(([^()]*)\)", paren, title)
+    # "W/ ..." running to the end of the title (bare "with" is too common in real names)
+    m = re.search(r"(?:,\s*|\s+)(?:w/|with\s+(?=manual\b))\s*([^()]*)$", rest, re.IGNORECASE)
+    if m:
+        _apply_hint("w/ " + m.group(1), hints)
+        rest = rest[: m.start()]
+    hints.title = re.sub(r"\s+", " ", rest).strip(" ,-") or title
+    return hints
+
+
+def _is_hint(part: str) -> bool:
+    n = norm(part)
+    return (
+        bool(re.match(r"(?:w/|with\s)", part, re.IGNORECASE))
+        or n in {"nomanual", "nobox"}
+        or n in _LOOSE_WORDS | _NEW_WORDS | _CIB_WORDS
+    )
+
+
+def _apply_hint(part: str, hints: TitleHints) -> None:
+    n = norm(part)
+    wm = re.match(r"(?:w/|with\s)\s*(.*)$", part, re.IGNORECASE)
+    if wm:
+        _with(_hint_words(wm.group(1), hints), hints)
+    elif n == "nomanual":
+        hints.has_manual = False
+    elif n == "nobox":
+        pass  # the default without a box
+    elif _hint_words(part, hints):
+        hints.extras.append(part)
+
+
+def _with(what: str, hints: TitleHints) -> None:
+    if not what:
+        return
+    if norm(what) in {"manual", "manuel", "instructions"}:
+        hints.has_manual = True
+    else:
+        hints.extras.append(f"with {what}")
+
+
 def _cell(row: dict[str, str], mapping: dict[str, str], f: str) -> str:
     col = mapping.get(f)
     return (row.get(col) or "").strip() if col else ""
@@ -570,7 +668,8 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
 
         v = r.values
 
-        title = cell("title")
+        hints = title_hints(cell("title"))
+        title = hints.title
         raw_url = cell("pricecharting_url")
         url = normalize_pricecharting_url(raw_url) or "" if raw_url else ""
         if raw_url and not url:
@@ -578,7 +677,6 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         if not title and not url:
             r.errors.append("missing title")
         v["title"] = title
-        v["pricecharting_url"] = url or None
 
         region_raw = cell("region")
         region = parse_region(region_raw) if region_raw else None
@@ -591,23 +689,35 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
                 f"PriceCharting link looks like a different game ({url.rsplit('/', 1)[-1]}); ignored"
             )
             url = ""
-        named = (
-            matcher.match_name(cell("platform"), region, opts.default_region) if cell("platform") else None
-        )
+        platform_raw = cell("platform")
+        # A "Consoles" or "Accessories" tab (sheet name as platform) says what the items are;
+        # their platform comes from the link or the title instead.
+        category_from_platform = _word_lookup(CATEGORY_WORDS, platform_raw) if platform_raw else None
+        if category_from_platform and not matcher.match_name(platform_raw):
+            platform_raw = ""
+        named = matcher.match_name(platform_raw, region, opts.default_region) if platform_raw else None
         linked = matcher.for_url(url)
         if url and named and linked and not any(_same_hardware(named, p) for p in linked):
             r.warnings.append(f"PriceCharting link is for {linked[0].name}, not {named.name}; ignored")
             url = ""
-        platform = matcher.match(cell("platform"), url or None, region, opts.default_region)
-        if platform is None and cell("platform"):
+        v["pricecharting_url"] = url or None
+        platform = matcher.match(platform_raw, url or None, region, opts.default_region)
+        if category_from_platform and not platform_raw:
+            in_title = matcher.find_in_text(title, region, opts.default_region)
+            # Hardware named in the title wins over the link's console ("Sega Nomad" is priced
+            # under Genesis on PriceCharting but is its own platform here).
+            platform = in_title or platform
+            if platform is None and not default_platform:
+                r.errors.append(f"no platform found in {title!r}; pick a default platform")
+        if platform is None and platform_raw:
             if default_platform:
-                r.warnings.append(f"unknown platform {cell('platform')!r}, using {default_platform.name}")
+                r.warnings.append(f"unknown platform {platform_raw!r}, using {default_platform.name}")
             else:
-                r.errors.append(f"unknown platform {cell('platform')!r}")
+                r.errors.append(f"unknown platform {platform_raw!r}")
         platform = platform or default_platform
-        if platform is None and "unknown platform" not in " ".join(r.errors):
+        if platform is None and not r.errors:
             r.errors.append("missing platform")
-        elif platform and opts.default_platform_id and not cell("platform"):
+        elif platform and opts.default_platform_id and not platform_raw:
             platform = matcher.in_region(platform, region)
         if platform:
             r.platform_id, r.platform_name = platform.id, platform.name
@@ -621,6 +731,10 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
             parsed = _word_lookup(table, raw) if raw else None
             if raw and parsed is None:
                 r.warnings.append(f"{f} {raw!r} not recognized, using {default.value}")
+            if not raw and f == "condition":
+                parsed = hints.condition
+            if not raw and f == "category":
+                parsed = category_from_platform
             v[f] = (parsed or default).value
 
         try:
@@ -667,6 +781,8 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
                 v[f] = None
             if v[f] is not None and part not in v:
                 v[part] = True  # a rated part is there
+        if hints.has_manual is not None and not cell("has_manual"):
+            v["has_manual"] = hints.has_manual
         # Sensible component defaults from condition when not given
         v.setdefault("has_item", v["condition"] not in ("box_only", "manual_only"))
         v.setdefault("has_box", v["condition"] in ("cib", "new", "box_only"))
@@ -685,6 +801,10 @@ def analyze(db: Session, user_id: int, rows: list[dict[str, str]], opts: Options
         v["region"] = None  # the platform carries the region
         for f in ("grade", "location", "notes"):
             v[f] = cell(f) or None
+        if hints.extras:
+            extras = "; ".join(hints.extras)
+            extras = extras[:1].upper() + extras[1:]
+            v["notes"] = f"{v['notes']}\n{extras}" if v["notes"] else extras
         v["acquired_from"] = cell("acquired_from")[:64] or None
 
         if r.platform_id:

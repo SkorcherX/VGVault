@@ -190,3 +190,105 @@ def test_import_distrusts_wrong_links_and_keeps_genesis(admin):
     assert res[2]["platform"] == "Sega Genesis" and "is for Xbox, not Sega Genesis" in res[2]["warnings"][0]
     assert res[3]["platform"] == "Sega Mega Drive (PAL)"  # same console family, other region: trust the link
     assert res[4]["platform"] == "TurboGrafx-CD" and res[4]["warnings"] == []  # add-on for the same console
+
+
+def _name_value_workbook() -> bytes:
+    """A price-tracker layout: a tab per platform headed "Name | Value | Information | TOTAL",
+    a "Consoles" tab, a summary tab, and a want list with one column per platform."""
+    wb = Workbook()
+    wb.active.title = "Consoles"
+    tabs = {
+        "Consoles": [
+            ("Sega Nomad", 80, "genesis/sega-nomad"),
+            ("Nintendo 64 (with expansion pack)", 63, None),
+        ],
+        "Genesis": [
+            ("Desert Strike (Loose)", 6.95, "sega-genesis/desert-strike"),
+            ("Mortal Kombat (No Manual)", 8, None),
+        ],
+        "N3DS": [("Pokemon Y", 23.8, None)],
+        "PS2": [("Final Fantasy X (Sealed)", 11.5, None)],
+        "SNES": [("R-Type, W/ Manual Loose", 12.36, None), ("Final Fantasy III W/ Guide", 242.42, None)],
+    }
+    for name, games in tabs.items():
+        ws = wb[name] if name in wb.sheetnames else wb.create_sheet(name)
+        ws["A1"] = '=image("http://example.com/box.png")'
+        for c, h in enumerate(["Name", "Value", "Information", "TOTAL", f"=SUM(B3:B{len(games) + 2})"], 1):
+            ws.cell(2, c, h)
+        for r, (title, value, slug) in enumerate(games, start=3):
+            ws.cell(r, 1, title)
+            ws.cell(r, 2, value)
+            if slug:
+                ws.cell(r, 3, f'=HYPERLINK("http://videogames.pricecharting.com/game/{slug}","Data Link")')
+    totals = wb.create_sheet("TOTALS")
+    totals.append(["CONSOLE", "COUNT", "VALUE", "COMPLETE"])
+    totals.append(["NES", 17, 144.77, 0.02])
+    wish = wb.create_sheet("Wishlist")
+    wish.append([" NES", "Super NES"])
+    wish.append(["Battletoads", "Chrono Trigger"])
+    wish.append([None, "Super Metroid"])
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_name_value_tracker(admin):
+    r = admin.post("/api/import/workbook", files={"file": ("c.xlsx", _name_value_workbook())})
+    sheets = {s["name"]: s for s in r.json()["sheets"]}
+    assert sheets["TOTALS"]["rows"] == []  # a summary, not items
+    assert sheets["Genesis"]["headers"] == [
+        "Name",
+        "Value",
+        "Information",
+        "Information (link)",
+        "Sheet name",
+    ]
+    assert sheets["Consoles"]["headers"] == sheets["Genesis"]["headers"]  # same layout: import together
+    assert [(w["Title"], w["Platform"]) for w in sheets["Wishlist"]["rows"]] == [
+        ("Battletoads", "NES"),
+        ("Chrono Trigger", "Super NES"),
+        ("Super Metroid", "Super NES"),
+    ]
+
+    rows = [row for n in ("Consoles", "Genesis", "N3DS", "PS2", "SNES") for row in sheets[n]["rows"]]
+    headers = sheets["Genesis"]["headers"]
+    mapping = admin.post("/api/import/suggest", json={"headers": headers, "rows": rows}).json()
+    assert mapping == {
+        "title": "Name",
+        "pricecharting_url": "Information (link)",
+        "platform": "Sheet name",
+    }
+    result = admin.post("/api/import/commit", json={"rows": rows, "mapping": mapping}).json()
+    assert result["failed"] == 0 and result["created_items"] == 8
+    items = {i["product"]["title"]: i for i in admin.get("/api/collection").json()["items"]}
+
+    nomad = items["Sega Nomad"]
+    assert nomad["product"]["category"] == "console" and nomad["product"]["platform"]["name"] == "Sega Nomad"
+    n64 = items["Nintendo 64"]
+    assert n64["product"]["platform"]["name"] == "Nintendo 64" and n64["notes"] == "With expansion pack"
+    assert items["Pokemon Y"]["product"]["platform"]["name"] == "Nintendo 3DS"
+    desert = items["Desert Strike"]
+    assert desert["condition"] == "loose" and desert["purchase_price"] is None
+    assert (
+        desert["product"]["pricecharting_url"]
+        == "https://www.pricecharting.com/game/sega-genesis/desert-strike"
+    )
+    assert not items["Mortal Kombat"]["has_manual"]
+    assert items["Final Fantasy X"]["condition"] == "new"
+    rtype = items["R-Type"]
+    assert rtype["condition"] == "loose" and rtype["has_manual"] and not rtype["has_box"]
+    assert items["Final Fantasy III"]["notes"] == "With Guide"
+
+    wish = sheets["Wishlist"]
+    mapping = admin.post(
+        "/api/import/suggest", json={"headers": wish["headers"], "rows": wish["rows"]}
+    ).json()
+    assert mapping == {"title": "Title", "platform": "Platform", "status": "Status"}
+    result = admin.post("/api/import/commit", json={"rows": wish["rows"], "mapping": mapping}).json()
+    assert result["created_items"] == 3 and result["failed"] == 0
+    wanted = admin.get("/api/collection", params={"status": "wishlist"}).json()["items"]
+    assert {(i["product"]["title"], i["product"]["platform"]["name"]) for i in wanted} == {
+        ("Battletoads", "NES"),
+        ("Chrono Trigger", "Super Nintendo"),
+        ("Super Metroid", "Super Nintendo"),
+    }

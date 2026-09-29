@@ -344,3 +344,13 @@ def test_parse_rating():
     assert [parse_rating(v) for v in ["0.8", "0.90000004", "1.0", "7", "10", "85%", "?", ""]] == [
         8, 9, 10, 7, 10, 9, None, None,
     ]  # fmt: skip
+
+
+def test_title_hints():
+    from app.services.importer import title_hints
+
+    h = title_hints("Mario Paint (W/ Mouse & Pad, Loose)")
+    assert (h.title, h.condition, h.extras) == ("Mario Paint", "loose", ["with Mouse & Pad"])
+    assert title_hints("Dragon Warrior W/ Manual").has_manual is True
+    assert title_hints("Starfox 64 (Big Box)").title == "Starfox 64 (Big Box)"  # an edition, kept
+    assert title_hints("Dancing with the Stars").title == "Dancing with the Stars"
