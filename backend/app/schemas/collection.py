@@ -60,6 +60,11 @@ class ItemUpdate(BaseModel):
     notes: str | None = None
 
 
+class MoveItems(BaseModel):
+    ids: list[int] = Field(min_length=1)
+    platform_id: int
+
+
 class BulkUpdate(BaseModel):
     ids: list[int] = Field(min_length=1)
     changes: ItemUpdate

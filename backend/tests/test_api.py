@@ -115,3 +115,31 @@ def test_bulk_update_and_delete(admin):
     assert r.status_code == 200 and all(i["location"] == "Shelf 1" for i in r.json())
     assert admin.delete(f"/api/collection/{a['id']}").status_code == 204
     assert admin.get("/api/collection").json()["total"] == 1
+
+
+def test_move_items_to_another_platform(admin):
+    ds = _platform_id(admin, "nintendo-ds")
+    wrong = admin.post("/api/products", json={"title": "Cubic Ninja", "platform_id": ds}).json()
+    admin.patch(
+        f"/api/products/{wrong['id']}",
+        json={"pricecharting_url": "https://www.pricecharting.com/game/nintendo-ds/cubic-ninja"},
+    )
+    a = admin.post("/api/collection", json={"product_id": wrong["id"], "purchase_price": "43"}).json()
+    b = admin.post("/api/collection", json={"product_id": wrong["id"], "condition": "cib"}).json()
+    three_ds = _platform_id(admin, "nintendo-3ds")
+
+    r = admin.post("/api/collection/move", json={"ids": [a["id"], b["id"]], "platform_id": three_ds})
+    assert r.status_code == 200, r.text
+    moved = r.json()
+    assert {i["product"]["platform"]["id"] for i in moved} == {three_ds}
+    assert moved[0]["product"]["id"] == moved[1]["product"]["id"]  # both share one new product
+    assert moved[0]["product"]["title"] == "Cubic Ninja" and moved[0]["product"]["pricecharting_url"] is None
+    assert {i["purchase_price"] for i in moved} == {"43.00", None}  # item details kept
+
+    # Moving back reuses the existing product rather than making another
+    back = admin.post(
+        "/api/collection/move", json={"ids": [a["id"]], "platform_id": wrong["platform_id"]}
+    ).json()
+    assert back[0]["product"]["id"] == wrong["id"]
+    assert admin.post("/api/collection/move", json={"ids": [999], "platform_id": three_ds}).status_code == 404
+    assert admin.post("/api/collection/move", json={"ids": [a["id"]], "platform_id": 9999}).status_code == 400

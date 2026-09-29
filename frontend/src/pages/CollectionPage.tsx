@@ -1,6 +1,11 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   toQuery,
@@ -18,31 +23,32 @@ import {
   type Item,
   type ItemStatus,
   type MediaType,
+  type Platform,
   type RatingBand,
   type Summary,
-} from '../api'
-import { CheckList, ErrorText, money } from '../components'
-import ItemDialog from './ItemDialog'
+} from "../api";
+import { CheckList, ErrorText, money } from "../components";
+import ItemDialog from "./ItemDialog";
 
 interface Filters {
-  q: string
-  status: ItemStatus[]
-  category: Category[]
-  platform_id: number[]
-  brand: string[]
-  era: string[]
-  media_type: MediaType[]
-  condition: Condition[]
-  rating: RatingBand[]
-  region: string[]
-  tag: string
-  location: string
-  acquired_from: string
+  q: string;
+  status: ItemStatus[];
+  category: Category[];
+  platform_id: number[];
+  brand: string[];
+  era: string[];
+  media_type: MediaType[];
+  condition: Condition[];
+  rating: RatingBand[];
+  region: string[];
+  tag: string;
+  location: string;
+  acquired_from: string;
 }
 
 const EMPTY_FILTERS: Filters = {
-  q: '',
-  status: ['owned'],
+  q: "",
+  status: ["owned"],
   category: [],
   platform_id: [],
   brand: [],
@@ -51,175 +57,243 @@ const EMPTY_FILTERS: Filters = {
   condition: [],
   rating: [],
   region: [],
-  tag: '',
-  location: '',
-  acquired_from: '',
-}
+  tag: "",
+  location: "",
+  acquired_from: "",
+};
 
-const FILTERS_KEY = 'vgvault.filters'
+const FILTERS_KEY = "vgvault.filters";
 
 function loadFilters(key: string): Filters {
   try {
-    const raw = localStorage.getItem(key)
-    return raw ? { ...EMPTY_FILTERS, ...JSON.parse(raw) } : EMPTY_FILTERS
+    const raw = localStorage.getItem(key);
+    return raw ? { ...EMPTY_FILTERS, ...JSON.parse(raw) } : EMPTY_FILTERS;
   } catch {
-    return EMPTY_FILTERS
+    return EMPTY_FILTERS;
   }
 }
 
-const PAGE_SIZE = 100
+const PAGE_SIZE = 100;
 const opts = <T extends string>(labels: Record<T, string>) =>
-  (Object.entries(labels) as [T, string][]).map(([value, label]) => ({ value, label }))
-const strOpts = (values: string[]) => values.map((v) => ({ value: v, label: v }))
+  (Object.entries(labels) as [T, string][]).map(([value, label]) => ({
+    value,
+    label,
+  }));
+const strOpts = (values: string[]) =>
+  values.map((v) => ({ value: v, label: v }));
 
 type SortKey =
-  | 'title'
-  | 'platform'
-  | 'brand'
-  | 'condition'
-  | 'rating'
-  | 'market_price'
-  | 'value'
-  | 'purchase_price'
-  | 'purchase_date'
-  | 'created_at'
+  | "title"
+  | "platform"
+  | "brand"
+  | "condition"
+  | "rating"
+  | "market_price"
+  | "value"
+  | "purchase_price"
+  | "purchase_date"
+  | "created_at";
 
 interface SharedPage {
-  owner: string
-  shows_paid: boolean
-  items: Item[]
-  total: number
+  owner: string;
+  shows_paid: boolean;
+  items: Item[];
+  total: number;
 }
 
 /** Your own collection, or (with `ownerId`) someone's shared collection, read-only. */
 export default function CollectionPage({ ownerId }: { ownerId?: number }) {
-  const qc = useQueryClient()
-  const readOnly = ownerId !== undefined
-  const base = readOnly ? `/shared/${ownerId}` : '/collection'
-  const storeKey = readOnly ? `vgvault.shared.${ownerId}` : FILTERS_KEY
-  const [filters, setFilters] = useState<Filters>(() => loadFilters(storeKey))
-  const [search, setSearch] = useState(filters.q)
-  const [sort, setSort] = useState<{ key: SortKey; order: 'asc' | 'desc' }>({ key: 'title', order: 'asc' })
-  const [page, setPage] = useState(0)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [editing, setEditing] = useState<Item | 'new' | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
+  const qc = useQueryClient();
+  const readOnly = ownerId !== undefined;
+  const base = readOnly ? `/shared/${ownerId}` : "/collection";
+  const storeKey = readOnly ? `vgvault.shared.${ownerId}` : FILTERS_KEY;
+  const [filters, setFilters] = useState<Filters>(() => loadFilters(storeKey));
+  const [search, setSearch] = useState(filters.q);
+  const [sort, setSort] = useState<{ key: SortKey; order: "asc" | "desc" }>({
+    key: "title",
+    order: "asc",
+  });
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [editing, setEditing] = useState<Item | "new" | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     try {
-      localStorage.setItem(storeKey, JSON.stringify(filters))
+      localStorage.setItem(storeKey, JSON.stringify(filters));
     } catch {
       /* storage unavailable */
     }
-  }, [filters, storeKey])
+  }, [filters, storeKey]);
 
   // Debounce the text search.
   useEffect(() => {
-    const t = setTimeout(() => update({ q: search }), 250)
-    return () => clearTimeout(t)
+    const t = setTimeout(() => update({ q: search }), 250);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search])
+  }, [search]);
 
   const update = (patch: Partial<Filters>) => {
-    setFilters((f) => ({ ...f, ...patch }))
-    setPage(0)
-    setSelected(new Set())
-  }
+    setFilters((f) => ({ ...f, ...patch }));
+    setPage(0);
+    setSelected(new Set());
+  };
 
-  const facets = useQuery({ queryKey: ['facets', ownerId], queryFn: () => api.get<Facets>(`${base}/facets`) })
+  const facets = useQuery({
+    queryKey: ["facets", ownerId],
+    queryFn: () => api.get<Facets>(`${base}/facets`),
+  });
   const items = useQuery({
-    queryKey: ['collection', ownerId, filters, sort, page],
+    queryKey: ["collection", ownerId, filters, sort, page],
     queryFn: () =>
-      api.get<Partial<SharedPage> & { items: Item[]; total: number }>(readOnly ? `${base}/collection` : base, {
-        ...filters,
-        sort: sort.key,
-        order: sort.order,
-        offset: page * PAGE_SIZE,
-        limit: PAGE_SIZE,
-      }),
+      api.get<Partial<SharedPage> & { items: Item[]; total: number }>(
+        readOnly ? `${base}/collection` : base,
+        {
+          ...filters,
+          sort: sort.key,
+          order: sort.order,
+          offset: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        },
+      ),
     placeholderData: keepPreviousData,
-  })
+  });
   const summary = useQuery({
-    queryKey: ['summary', ownerId],
-    queryFn: () => api.get<Partial<Summary> & { total_value: number; quantity: number }>(`${base}/summary`),
-  })
-  const showPaid = !readOnly || !!items.data?.shows_paid
+    queryKey: ["summary", ownerId],
+    queryFn: () =>
+      api.get<Partial<Summary> & { total_value: number; quantity: number }>(
+        `${base}/summary`,
+      ),
+  });
+  const showPaid = !readOnly || !!items.data?.shows_paid;
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['collection'] })
-    qc.invalidateQueries({ queryKey: ['facets'] })
-    qc.invalidateQueries({ queryKey: ['summary'] })
-    qc.invalidateQueries({ queryKey: ['analytics'] })
-  }
+    qc.invalidateQueries({ queryKey: ["collection"] });
+    qc.invalidateQueries({ queryKey: ["facets"] });
+    qc.invalidateQueries({ queryKey: ["summary"] });
+    qc.invalidateQueries({ queryKey: ["analytics"] });
+  };
   const bulk = useMutation({
     mutationFn: (changes: Record<string, unknown>) =>
-      api.patch('/collection/bulk', { ids: [...selected], changes }),
+      api.patch("/collection/bulk", { ids: [...selected], changes }),
     onSuccess: () => {
-      setSelected(new Set())
-      invalidate()
+      setSelected(new Set());
+      invalidate();
     },
-  })
+  });
+  const platforms = useQuery({
+    queryKey: ["platforms"],
+    queryFn: () => api.get<Platform[]>("/platforms"),
+    enabled: !readOnly,
+  });
+  const bulkMove = useMutation({
+    mutationFn: (platformId: number) =>
+      api.post("/collection/move", {
+        ids: [...selected],
+        platform_id: platformId,
+      }),
+    onSuccess: () => {
+      setSelected(new Set());
+      invalidate();
+    },
+  });
   const bulkDelete = useMutation({
-    mutationFn: () => Promise.all([...selected].map((id) => api.del(`/collection/${id}`))),
+    mutationFn: () =>
+      Promise.all([...selected].map((id) => api.del(`/collection/${id}`))),
     onSuccess: () => {
-      setSelected(new Set())
-      invalidate()
+      setSelected(new Set());
+      invalidate();
     },
-  })
+  });
 
-  const rows = items.data?.items ?? []
-  const total = items.data?.total ?? 0
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id))
-  const f = facets.data
+  const rows = items.data?.items ?? [];
+  const total = items.data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const f = facets.data;
 
-  const header = (key: SortKey, label: string, extra = '') => (
+  const header = (key: SortKey, label: string, extra = "") => (
     <th
       className={`sortable ${extra}`}
       onClick={() =>
         setSort((s) => {
-          if (s.key === key) return { key, order: s.order === 'asc' ? 'desc' : 'asc' }
+          if (s.key === key)
+            return { key, order: s.order === "asc" ? "desc" : "asc" };
           // Money and date columns are most useful biggest/newest first.
-          const descFirst = ['market_price', 'value', 'purchase_price', 'purchase_date', 'created_at'].includes(key)
-          return { key, order: descFirst ? 'desc' : 'asc' }
+          const descFirst = [
+            "market_price",
+            "value",
+            "purchase_price",
+            "purchase_date",
+            "created_at",
+          ].includes(key);
+          return { key, order: descFirst ? "desc" : "asc" };
         })
       }
     >
       {label}
-      {sort.key === key && (sort.order === 'asc' ? ' ▲' : ' ▼')}
+      {sort.key === key && (sort.order === "asc" ? " ▲" : " ▼")}
     </th>
-  )
+  );
 
   return (
     <div className="collection">
-      <button className="ghost filters-toggle" aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
-        {showFilters ? 'Hide filters' : 'Search & filters'}
+      <button
+        className="ghost filters-toggle"
+        aria-expanded={showFilters}
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        {showFilters ? "Hide filters" : "Search & filters"}
       </button>
-      <aside className={showFilters ? 'filters open' : 'filters'}>
+      <aside className={showFilters ? "filters open" : "filters"}>
         <input
           type="search"
-          placeholder={readOnly ? 'Search titles…' : 'Search titles & notes…'}
+          placeholder={readOnly ? "Search titles…" : "Search titles & notes…"}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button className="link" onClick={() => (setSearch(''), update({ ...EMPTY_FILTERS, status: [] }))}>
+        <button
+          className="link"
+          onClick={() => (
+            setSearch(""),
+            update({ ...EMPTY_FILTERS, status: [] })
+          )}
+        >
           Reset all filters
         </button>
-        <CheckList label="Status" options={opts(STATUSES)} value={filters.status} onChange={(v) => update({ status: v })} />
+        <CheckList
+          label="Status"
+          options={opts(STATUSES)}
+          value={filters.status}
+          onChange={(v) => update({ status: v })}
+        />
         <CheckList
           label="Category"
           options={opts(CATEGORIES)}
           value={filters.category}
           onChange={(v) => update({ category: v })}
         />
-        <CheckList label="Brand" options={strOpts(f?.brands ?? [])} value={filters.brand} onChange={(v) => update({ brand: v })} />
+        <CheckList
+          label="Brand"
+          options={strOpts(f?.brands ?? [])}
+          value={filters.brand}
+          onChange={(v) => update({ brand: v })}
+        />
         <CheckList
           label="Platform"
-          options={(f?.platforms ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          options={(f?.platforms ?? []).map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
           value={filters.platform_id}
           onChange={(v) => update({ platform_id: v })}
         />
-        <CheckList label="Era" options={strOpts(f?.eras ?? [])} value={filters.era} onChange={(v) => update({ era: v })} />
+        <CheckList
+          label="Era"
+          options={strOpts(f?.eras ?? [])}
+          value={filters.era}
+          onChange={(v) => update({ era: v })}
+        />
         <CheckList
           label="Media"
           options={opts(MEDIA_TYPES)}
@@ -247,7 +321,10 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         {f && f.tags.length > 0 && (
           <label className="field">
             <span>Tag</span>
-            <select value={filters.tag} onChange={(e) => update({ tag: e.target.value })}>
+            <select
+              value={filters.tag}
+              onChange={(e) => update({ tag: e.target.value })}
+            >
               <option value="">Any</option>
               {f.tags.map((t) => (
                 <option key={t}>{t}</option>
@@ -258,7 +335,10 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         {f && f.sources?.length > 0 && (
           <label className="field">
             <span>Bought from</span>
-            <select value={filters.acquired_from} onChange={(e) => update({ acquired_from: e.target.value })}>
+            <select
+              value={filters.acquired_from}
+              onChange={(e) => update({ acquired_from: e.target.value })}
+            >
               <option value="">Any</option>
               {f.sources.map((src) => (
                 <option key={src}>{src}</option>
@@ -269,7 +349,10 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         {f && f.locations.length > 0 && (
           <label className="field">
             <span>Location</span>
-            <select value={filters.location} onChange={(e) => update({ location: e.target.value })}>
+            <select
+              value={filters.location}
+              onChange={(e) => update({ location: e.target.value })}
+            >
               <option value="">Any</option>
               {f.locations.map((l) => (
                 <option key={l}>{l}</option>
@@ -281,14 +364,22 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
 
       <section className="results">
         <div className="page-head">
-          <h1>{readOnly ? `${items.data?.owner ?? '…'}'s collection` : 'Collection'}</h1>
+          <h1>
+            {readOnly
+              ? `${items.data?.owner ?? "…"}'s collection`
+              : "Collection"}
+          </h1>
           {readOnly && <span className="badge">read-only</span>}
           {summary.data && (
             <span className="muted">
-              <strong className="value">{money(summary.data.total_value)}</strong> value · {summary.data.quantity}{' '}
-              owned
-              {summary.data.cost_basis !== undefined && ` · paid ${money(summary.data.cost_basis)}`}
-              {!!summary.data.unpriced && ` · ${summary.data.unpriced} unpriced`}
+              <strong className="value">
+                {money(summary.data.total_value)}
+              </strong>{" "}
+              value · {summary.data.quantity} owned
+              {summary.data.cost_basis !== undefined &&
+                ` · paid ${money(summary.data.cost_basis)}`}
+              {!!summary.data.unpriced &&
+                ` · ${summary.data.unpriced} unpriced`}
             </span>
           )}
           <div className="spacer" />
@@ -304,19 +395,27 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
               <details className="dropdown">
                 <summary>Export ▾</summary>
                 <div className="menu">
-                  <p className="muted small" style={{ margin: '0 0 0.4rem' }}>
+                  <p className="muted small" style={{ margin: "0 0 0.4rem" }}>
                     Items matching the current filters
                   </p>
-                  <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'csv' })}`} download>
+                  <a
+                    className="link"
+                    href={`/api/collection/export${toQuery({ ...filters, format: "csv" })}`}
+                    download
+                  >
                     CSV (spreadsheet)
                   </a>
                   <br />
-                  <a className="link" href={`/api/collection/export${toQuery({ ...filters, format: 'json' })}`} download>
+                  <a
+                    className="link"
+                    href={`/api/collection/export${toQuery({ ...filters, format: "json" })}`}
+                    download
+                  >
                     JSON
                   </a>
                 </div>
               </details>
-              <button onClick={() => setEditing('new')}>+ Add item</button>
+              <button onClick={() => setEditing("new")}>+ Add item</button>
             </>
           )}
         </div>
@@ -326,7 +425,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
             <strong>{selected.size} selected</strong>
             <select
               value=""
-              onChange={(e) => e.target.value && bulk.mutate({ status: e.target.value })}
+              onChange={(e) =>
+                e.target.value && bulk.mutate({ status: e.target.value })
+              }
               aria-label="Set status"
             >
               <option value="">Set status…</option>
@@ -338,7 +439,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
             </select>
             <select
               value=""
-              onChange={(e) => e.target.value && bulk.mutate({ condition: e.target.value })}
+              onChange={(e) =>
+                e.target.value && bulk.mutate({ condition: e.target.value })
+              }
               aria-label="Set ownership"
             >
               <option value="">Set ownership…</option>
@@ -348,18 +451,42 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                 </option>
               ))}
             </select>
+            <select
+              value=""
+              onChange={(e) => {
+                const target = platforms.data?.find(
+                  (p) => p.id === Number(e.target.value),
+                );
+                if (
+                  target &&
+                  confirm(`Move ${selected.size} items to ${target.name}?`)
+                )
+                  bulkMove.mutate(target.id);
+              }}
+              aria-label="Move to platform"
+            >
+              <option value="">Move to platform…</option>
+              {platforms.data?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
             <button
               className="ghost"
               onClick={() => {
-                const location = prompt('Set location for selected items:')
-                if (location !== null) bulk.mutate({ location: location || null })
+                const location = prompt("Set location for selected items:");
+                if (location !== null)
+                  bulk.mutate({ location: location || null });
               }}
             >
               Set location
             </button>
             <button
               className="ghost danger"
-              onClick={() => confirm(`Delete ${selected.size} items?`) && bulkDelete.mutate()}
+              onClick={() =>
+                confirm(`Delete ${selected.size} items?`) && bulkDelete.mutate()
+              }
             >
               Delete
             </button>
@@ -368,7 +495,11 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
             </button>
           </div>
         )}
-        <ErrorText error={items.error ?? bulk.error ?? bulkDelete.error} />
+        <ErrorText
+          error={
+            items.error ?? bulk.error ?? bulkMove.error ?? bulkDelete.error
+          }
+        />
 
         <div className="table-wrap">
           <table className="table">
@@ -379,22 +510,28 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                     <input
                       type="checkbox"
                       checked={allSelected}
-                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
+                      onChange={() =>
+                        setSelected(
+                          allSelected
+                            ? new Set()
+                            : new Set(rows.map((r) => r.id)),
+                        )
+                      }
                       aria-label="Select all"
                     />
                   </th>
                 )}
-                {header('title', 'Title')}
-                {header('platform', 'Platform')}
-                {header('brand', 'Brand', 'hide-sm')}
+                {header("title", "Title")}
+                {header("platform", "Platform")}
+                {header("brand", "Brand", "hide-sm")}
                 <th className="hide-sm">Category</th>
-                {header('condition', 'Ownership')}
-                {header('rating', 'Condition')}
+                {header("condition", "Ownership")}
+                {header("rating", "Condition")}
                 <th className="hide-sm">Qty</th>
-                {header('market_price', 'Market', 'num hide-sm')}
-                {header('value', 'Value', 'num')}
-                {showPaid && header('purchase_price', 'Paid', 'hide-sm')}
-                {showPaid && header('purchase_date', 'Bought', 'hide-sm')}
+                {header("market_price", "Market", "num hide-sm")}
+                {header("value", "Value", "num")}
+                {showPaid && header("purchase_price", "Paid", "hide-sm")}
+                {showPaid && header("purchase_date", "Bought", "hide-sm")}
                 <th className="hide-sm">Status</th>
               </tr>
             </thead>
@@ -402,7 +539,7 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
               {rows.map((item) => (
                 <tr
                   key={item.id}
-                  className={readOnly ? '' : 'clickable'}
+                  className={readOnly ? "" : "clickable"}
                   onClick={readOnly ? undefined : () => setEditing(item)}
                 >
                   {!readOnly && (
@@ -411,17 +548,22 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                         type="checkbox"
                         checked={selected.has(item.id)}
                         onChange={(e) => {
-                          const next = new Set(selected)
-                          if (e.target.checked) next.add(item.id)
-                          else next.delete(item.id)
-                          setSelected(next)
+                          const next = new Set(selected);
+                          if (e.target.checked) next.add(item.id);
+                          else next.delete(item.id);
+                          setSelected(next);
                         }}
                       />
                     </td>
                   )}
                   <td className="title-cell">
                     {item.product.has_image ? (
-                      <img className="thumb" src={`/api/products/${item.product.id}/image`} alt="" loading="lazy" />
+                      <img
+                        className="thumb"
+                        src={`/api/products/${item.product.id}/image`}
+                        alt=""
+                        loading="lazy"
+                      />
                     ) : (
                       <span className="thumb" />
                     )}
@@ -439,7 +581,9 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                   </td>
                   <td>{item.product.platform.name}</td>
                   <td className="hide-sm">{item.product.platform.brand}</td>
-                  <td className="hide-sm">{CATEGORIES[item.product.category]}</td>
+                  <td className="hide-sm">
+                    {CATEGORIES[item.product.category]}
+                  </td>
                   <td>{CONDITIONS[item.condition]}</td>
                   <td>
                     <RatingCell item={item} />
@@ -449,15 +593,23 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
                   <td className="num">
                     <strong>{money(item.value)}</strong>
                   </td>
-                  {showPaid && <td className="num hide-sm">{money(item.purchase_price)}</td>}
-                  {showPaid && <td className="hide-sm">{item.purchase_date ?? ''}</td>}
+                  {showPaid && (
+                    <td className="num hide-sm">
+                      {money(item.purchase_price)}
+                    </td>
+                  )}
+                  {showPaid && (
+                    <td className="hide-sm">{item.purchase_date ?? ""}</td>
+                  )}
                   <td className="hide-sm">{STATUSES[item.status]}</td>
                 </tr>
               ))}
               {!items.isLoading && rows.length === 0 && (
                 <tr>
                   <td colSpan={13} className="muted empty">
-                    {readOnly ? 'No items match these filters.' : 'Nothing here yet. Add an item or loosen the filters.'}
+                    {readOnly
+                      ? "No items match these filters."
+                      : "Nothing here yet. Add an item or loosen the filters."}
                   </td>
                 </tr>
               )}
@@ -467,38 +619,52 @@ export default function CollectionPage({ ownerId }: { ownerId?: number }) {
         <div className="pager">
           <span className="muted">{total} items</span>
           <div className="spacer" />
-          <button className="ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <button
+            className="ghost"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+          >
             ← Prev
           </button>
           <span>
             {page + 1} / {pages}
           </span>
-          <button className="ghost" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+          <button
+            className="ghost"
+            disabled={page + 1 >= pages}
+            onClick={() => setPage(page + 1)}
+          >
             Next →
           </button>
         </div>
       </section>
 
       <datalist id="sources">
-        {f?.sources?.map((src) => <option key={src} value={src} />)}
+        {f?.sources?.map((src) => (
+          <option key={src} value={src} />
+        ))}
       </datalist>
       {editing && (
         <ItemDialog
-          item={editing === 'new' ? null : editing}
+          item={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={invalidate}
         />
       )}
     </div>
-  )
+  );
 }
 
 function RatingCell({ item }: { item: Item }) {
-  const overall = overallRating(item)
-  if (overall == null) return <span className="muted">—</span>
+  const overall = overallRating(item);
+  if (overall == null) return <span className="muted">—</span>;
   return (
-    <span title={partRatings(item).map(([label, n]) => `${label}: ${n} · ${RATINGS[n]}`).join('\n')}>
+    <span
+      title={partRatings(item)
+        .map(([label, n]) => `${label}: ${n} · ${RATINGS[n]}`)
+        .join("\n")}
+    >
       {overall} · {RATINGS[overall]}
     </span>
-  )
+  );
 }

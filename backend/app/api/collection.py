@@ -19,6 +19,7 @@ from app.schemas.collection import (
     ItemOut,
     ItemPage,
     ItemUpdate,
+    MoveItems,
     Summary,
 )
 from app.services.filters import Filters, items_query, overall_rating
@@ -43,6 +44,14 @@ def _own_item(db: DB, user_id: int, item_id: int) -> CollectionItem:
     if not item or item.user_id != user_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
     return item
+
+
+def _own_items(db: DB, user_id: int, ids: list[int]) -> list[CollectionItem]:
+    stmt = select(CollectionItem).where(CollectionItem.id.in_(ids), CollectionItem.user_id == user_id)
+    items = db.scalars(stmt).unique().all()
+    if len(items) != len(set(ids)):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more items not found")
+    return list(items)
 
 
 def _join_latest_price(stmt):
@@ -229,19 +238,50 @@ def create_item(body: ItemCreate, db: DB, user: CurrentUser):
 def bulk_update(body: BulkUpdate, db: DB, user: CurrentUser):
     changes = body.changes.model_dump(exclude_unset=True)
     _check_product(db, changes.get("product_id"))
-    items = (
-        db.scalars(
-            select(CollectionItem).where(CollectionItem.id.in_(body.ids), CollectionItem.user_id == user.id)
-        )
-        .unique()
-        .all()
-    )
-    if len(items) != len(set(body.ids)):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more items not found")
+    items = _own_items(db, user.id, body.ids)
     for item in items:
         for key, value in changes.items():
             setattr(item, key, value)
     db.commit()
+    return attach_prices(db, items)
+
+
+@router.post("/move", response_model=list[ItemOut])
+def move_items(body: MoveItems, db: DB, user: CurrentUser):
+    """Put items on another platform, e.g. after an import filed them under the wrong one. Each
+    goes to that platform's product of the same title, created if needed. The new product has
+    no PriceCharting link (the old one is for the other console); link it or run auto-link."""
+    platform = db.get(Platform, body.platform_id)
+    if not platform:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown platform")
+    items = _own_items(db, user.id, body.ids)
+    targets: dict[int, Product] = {}
+    for item in items:
+        old = item.product
+        if old.platform_id == platform.id:
+            continue
+        target = targets.get(old.id) or db.scalar(
+            select(Product)
+            .where(Product.platform_id == platform.id, func.lower(Product.title) == old.title.lower())
+            .order_by(Product.pricecharting_url.is_(None), Product.id)
+            .limit(1)
+        )
+        if target is None:
+            target = Product(
+                title=old.title,
+                platform_id=platform.id,
+                category=old.category,
+                genre=old.genre,
+                release_date=old.release_date,
+                upc=old.upc,
+            )
+            db.add(target)
+            db.flush()
+        targets[old.id] = target
+        item.product_id = target.id
+    db.commit()
+    for item in items:
+        db.refresh(item)
     return attach_prices(db, items)
 
 
