@@ -98,6 +98,16 @@ export default function ItemDialog({
   const set = <K extends keyof ItemFields>(key: K, value: ItemFields[K]) =>
     setFields((f) => ({ ...f, [key]: value }))
   const str = (v: string) => (v === '' ? null : v)
+  // Shown on the collapsed "More details" header so existing data isn't hidden silently.
+  const filledExtras = [
+    fields.item_rating,
+    fields.box_rating,
+    fields.manual_rating,
+    fields.location,
+    fields.acquired_from,
+    tagText.trim(),
+    fields.notes,
+  ].filter((v) => v != null && v !== '').length
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     save.mutate()
@@ -166,33 +176,6 @@ export default function ItemDialog({
               </label>
             ))}
           </div>
-          <div className="span2 ratings">
-            <span className="muted small">Condition</span>
-            {(
-              [
-                ['item_rating', 'Game', 'has_item'],
-                ['box_rating', 'Box', 'has_box'],
-                ['manual_rating', 'Manual', 'has_manual'],
-              ] as const
-            ).map(([k, label, part]) => (
-              <Field key={k} label={label}>
-                <select
-                  value={fields[k] ?? ''}
-                  disabled={!fields[part]}
-                  onChange={(e) => set(k, e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Not rated</option>
-                  {Object.entries(RATINGS)
-                    .reverse()
-                    .map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {v} · {l}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-            ))}
-          </div>
           {fields.condition === 'graded' && (
             <Field label="Grade">
               <input value={fields.grade ?? ''} onChange={(e) => set('grade', str(e.target.value))} />
@@ -256,25 +239,60 @@ export default function ItemDialog({
               </Field>
             </>
           )}
-          <Field label="Location">
-            <input value={fields.location ?? ''} onChange={(e) => set('location', str(e.target.value))} />
-          </Field>
-          <Field label="Bought from">
-            <input
-              value={fields.acquired_from ?? ''}
-              onChange={(e) => set('acquired_from', str(e.target.value))}
-              placeholder="Game store, eBay, garage sale…"
-              maxLength={64}
-              list="sources"
-            />
-          </Field>
-          <Field label="Tags (comma separated)">
-            <input value={tagText} onChange={(e) => setTagText(e.target.value)} />
-          </Field>
-          <label className="field span2">
-            <span>Notes</span>
-            <textarea rows={3} value={fields.notes ?? ''} onChange={(e) => set('notes', str(e.target.value))} />
-          </label>
+          <details className="span2 more-fields">
+            <summary>
+              More details
+              {filledExtras > 0 && <span className="muted small"> · {filledExtras} filled</span>}
+            </summary>
+            <div className="grid2">
+              <div className="span2 ratings">
+                <span className="muted small">Condition</span>
+                {(
+                  [
+                    ['item_rating', 'Game', 'has_item'],
+                    ['box_rating', 'Box', 'has_box'],
+                    ['manual_rating', 'Manual', 'has_manual'],
+                  ] as const
+                ).map(([k, label, part]) => (
+                  <Field key={k} label={label}>
+                    <select
+                      value={fields[k] ?? ''}
+                      disabled={!fields[part]}
+                      onChange={(e) => set(k, e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Not rated</option>
+                      {Object.entries(RATINGS)
+                        .reverse()
+                        .map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {v} · {l}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                ))}
+              </div>
+              <Field label="Location">
+                <input value={fields.location ?? ''} onChange={(e) => set('location', str(e.target.value))} />
+              </Field>
+              <Field label="Bought from">
+                <input
+                  value={fields.acquired_from ?? ''}
+                  onChange={(e) => set('acquired_from', str(e.target.value))}
+                  placeholder="Game store, eBay, garage sale…"
+                  maxLength={64}
+                  list="sources"
+                />
+              </Field>
+              <Field label="Tags (comma separated)">
+                <input value={tagText} onChange={(e) => setTagText(e.target.value)} />
+              </Field>
+              <label className="field span2">
+                <span>Notes</span>
+                <textarea rows={3} value={fields.notes ?? ''} onChange={(e) => set('notes', str(e.target.value))} />
+              </label>
+            </div>
+          </details>
           <div className="span2">
             <ErrorText error={save.error ?? remove.error} />
             <div className="row">
