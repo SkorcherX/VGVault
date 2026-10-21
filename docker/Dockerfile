@@ -17,7 +17,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=UTC
 WORKDIR /app
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get upgrade -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/app ./app
